@@ -80,8 +80,14 @@ def create_app():
         for build_path in possible_build_paths:
             static_file = os.path.join(build_path, 'static', filename)
             if os.path.exists(static_file) and os.path.isfile(static_file):
-                return send_from_directory(os.path.join(build_path, 'static'), filename)
-        return jsonify({'error': 'Static file not found', 'filename': filename}), 404
+                response = send_from_directory(os.path.join(build_path, 'static'), filename)
+                # Ensure proper MIME types for JavaScript and CSS
+                if filename.endswith('.js'):
+                    response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
+                elif filename.endswith('.css'):
+                    response.headers['Content-Type'] = 'text/css; charset=utf-8'
+                return response
+        return jsonify({'error': 'Static file not found', 'filename': filename, 'checked_paths': [os.path.join(p, 'static', filename) for p in possible_build_paths]}), 404
     
     # Serve React frontend - catch-all route for React Router (must be last)
     @app.route('/', defaults={'path': ''})
