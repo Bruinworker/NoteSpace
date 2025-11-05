@@ -5,14 +5,6 @@ import os
 from openai import OpenAI
 from typing import List, Optional, Tuple
 
-# Try to import tiktoken, but make it optional
-try:
-    import tiktoken
-    TIKTOKEN_AVAILABLE = True
-except ImportError:
-    TIKTOKEN_AVAILABLE = False
-    print("Warning: tiktoken not available, using fallback token counting")
-
 
 # Initialize OpenAI client
 def get_openai_client():
@@ -20,6 +12,8 @@ def get_openai_client():
     api_key = os.environ.get('OPENAI_API_KEY')
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
+    
+    # Use the new OpenAI SDK syntax (v1.0+) - no proxies parameter
     return OpenAI(api_key=api_key)
 
 
@@ -29,8 +23,8 @@ def chunk_text(text: str, max_chunk_size: int = 8000, overlap: int = 200) -> Lis
     
     Args:
         text: Text to chunk
-        max_chunk_size: Maximum tokens per chunk
-        overlap: Number of tokens to overlap between chunks
+        max_chunk_size: Maximum tokens per chunk (estimated as characters / 4)
+        overlap: Number of tokens to overlap between chunks (estimated as characters / 4)
         
     Returns:
         List of text chunks
@@ -38,33 +32,7 @@ def chunk_text(text: str, max_chunk_size: int = 8000, overlap: int = 200) -> Lis
     if not text:
         return []
     
-    # Use tiktoken if available, otherwise use character-based estimation
-    if TIKTOKEN_AVAILABLE:
-        try:
-            encoding = tiktoken.encoding_for_model("gpt-4")
-            tokens = encoding.encode(text)
-            
-            if len(tokens) <= max_chunk_size:
-                return [text]
-            
-            chunks = []
-            start = 0
-            
-            while start < len(tokens):
-                end = min(start + max_chunk_size, len(tokens))
-                chunk_tokens = tokens[start:end]
-                chunk_text = encoding.decode(chunk_tokens)
-                chunks.append(chunk_text)
-                
-                # Move start position with overlap
-                start = end - overlap
-            
-            return chunks
-        except Exception:
-            # Fall through to fallback method
-            pass
-    
-    # Fallback: character-based chunking (rough estimate: 1 token ≈ 4 characters)
+    # Character-based chunking (rough estimate: 1 token ≈ 4 characters)
     char_per_token = 4
     max_chars = max_chunk_size * char_per_token
     overlap_chars = overlap * char_per_token
@@ -122,7 +90,7 @@ Here are the document chunks:
 
 Please provide a synthesized, comprehensive document that combines all the information above in a clear and organized manner."""
 
-        # Call OpenAI API
+        # Call OpenAI API using the new SDK syntax
         response = client.chat.completions.create(
             model="gpt-4-turbo-preview",  # or "gpt-3.5-turbo" for cheaper option
             messages=[
@@ -134,7 +102,7 @@ Please provide a synthesized, comprehensive document that combines all the infor
         )
         
         synthesized_text = response.choices[0].message.content
-        total_tokens = response.usage.total_tokens if hasattr(response, 'usage') else 0
+        total_tokens = response.usage.total_tokens if response.usage else 0
         
         return synthesized_text, None, total_tokens
         
@@ -143,15 +111,7 @@ Please provide a synthesized, comprehensive document that combines all the infor
 
 
 def count_tokens(text: str) -> int:
-    """Count tokens in text using tiktoken if available, otherwise estimate."""
-    if TIKTOKEN_AVAILABLE:
-        try:
-            encoding = tiktoken.encoding_for_model("gpt-4")
-            tokens = encoding.encode(text)
-            return len(tokens)
-        except Exception:
-            pass
-    
-    # Fallback: rough estimate (1 token ≈ 4 characters)
+    """Count tokens in text using character-based estimation."""
+    # Rough estimate: 1 token ≈ 4 characters
     return len(text) // 4
 
