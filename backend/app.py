@@ -9,10 +9,31 @@ from datetime import timedelta
 jwt = JWTManager()
 
 def create_app():
-    app = Flask(__name__)
-    
     # Get the project root directory
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
+    # Find frontend build path
+    possible_build_paths = [
+        os.path.abspath(os.path.join(project_root, 'frontend', 'build')),
+        os.path.abspath(os.path.join(os.getcwd(), 'frontend', 'build')),
+        os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'build')),
+    ]
+    
+    frontend_build_path = None
+    for build_path in possible_build_paths:
+        if os.path.exists(build_path):
+            frontend_build_path = build_path
+            break
+    
+    # Configure Flask with static folder for React build
+    # static_url_path='' means serve files from root, but we need to handle /static/ manually
+    app = Flask(__name__)
+    
+    # Add static file route for React build static files
+    if frontend_build_path and os.path.exists(frontend_build_path):
+        @app.route('/static/<path:filename>')
+        def static_files(filename):
+            return send_from_directory(os.path.join(frontend_build_path, 'static'), filename)
     
     # Configuration
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -59,43 +80,16 @@ def create_app():
     app.register_blueprint(topic_bp, url_prefix='/api/topics')
     app.register_blueprint(upload_bp, url_prefix='/api/upload')
     
-    # Serve React frontend (only for non-API routes)
-    # Try multiple possible paths for the build folder (use absolute paths)
-    possible_build_paths = [
-        os.path.abspath(os.path.join(project_root, 'frontend', 'build')),
-        os.path.abspath(os.path.join(os.getcwd(), 'frontend', 'build')),
-        os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'build')),
-    ]
-    
-    frontend_build_path = None
-    for build_path in possible_build_paths:
-        if os.path.exists(build_path):
-            frontend_build_path = build_path
-            break
-    
-    # Serve static files from React build (CSS, JS, etc.)
-    @app.route('/static/<path:filename>')
-    def serve_static(filename):
-        if frontend_build_path and os.path.exists(frontend_build_path):
-            static_file = os.path.join(frontend_build_path, 'static', filename)
-            if os.path.exists(static_file) and os.path.isfile(static_file):
-                return send_from_directory(os.path.join(frontend_build_path, 'static'), filename)
-        return jsonify({'error': 'File not found'}), 404
-    
-    # Serve other static assets (favicon, manifest, etc.)
-    @app.route('/<path:filename>')
-    def serve_other_static(filename):
-        # Don't serve frontend for API routes
-        if filename.startswith('api/'):
+    # Serve React frontend - catch-all route for React Router (must be last)
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_frontend(path):
+        # Don't serve frontend for API routes (they should be handled by blueprints above)
+        if path.startswith('api/'):
             return jsonify({'error': 'Not found'}), 404
         
-        if frontend_build_path and os.path.exists(frontend_build_path):
-            file_path = os.path.join(frontend_build_path, filename)
-            # Only serve actual files, not directories
-            if os.path.exists(file_path) and os.path.isfile(file_path):
-                return send_from_directory(frontend_build_path, filename)
-        
-        # For all other routes, serve index.html (React Router handles routing)
+        # Serve index.html for all non-API routes (React Router handles routing)
+        # Flask will automatically serve static files from static_folder
         if frontend_build_path and os.path.exists(frontend_build_path):
             return send_from_directory(frontend_build_path, 'index.html')
         else:
@@ -109,14 +103,6 @@ def create_app():
                 'frontend_exists': os.path.exists(os.path.join(project_root, 'frontend')),
             }
             return jsonify(debug_info), 200
-    
-    # Serve index.html for root route
-    @app.route('/')
-    def serve_index():
-        if frontend_build_path and os.path.exists(frontend_build_path):
-            return send_from_directory(frontend_build_path, 'index.html')
-        else:
-            return jsonify({'message': 'NoteSpace API - Frontend not built'}), 200
     
     return app
 
