@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5001/api';
+// Use relative URL for same-domain deployment, or absolute URL if specified
+const API_BASE_URL = process.env.REACT_APP_API_URL || (window.location.origin + '/api');
 
 // Create axios instance with interceptor to add token to each request
 const api = axios.create({
