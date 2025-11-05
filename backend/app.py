@@ -60,7 +60,18 @@ def create_app():
     app.register_blueprint(upload_bp, url_prefix='/api/upload')
     
     # Serve React frontend (only for non-API routes)
-    frontend_build_path = os.path.join(project_root, 'frontend', 'build')
+    # Try multiple possible paths for the build folder
+    possible_build_paths = [
+        os.path.join(project_root, 'frontend', 'build'),
+        os.path.join(os.getcwd(), 'frontend', 'build'),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'build'),
+    ]
+    
+    frontend_build_path = None
+    for build_path in possible_build_paths:
+        if os.path.exists(build_path):
+            frontend_build_path = build_path
+            break
     
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
@@ -70,7 +81,7 @@ def create_app():
             return jsonify({'error': 'Not found'}), 404
         
         # Serve static files from React build
-        if os.path.exists(frontend_build_path):
+        if frontend_build_path and os.path.exists(frontend_build_path):
             if path != "" and os.path.exists(os.path.join(frontend_build_path, path)):
                 return send_from_directory(frontend_build_path, path)
             else:
@@ -80,10 +91,10 @@ def create_app():
             debug_info = {
                 'message': 'NoteSpace API - Frontend not built',
                 'project_root': project_root,
-                'frontend_build_path': frontend_build_path,
-                'build_exists': os.path.exists(frontend_build_path),
+                'cwd': os.getcwd(),
+                'checked_paths': possible_build_paths,
+                'build_exists': [os.path.exists(p) for p in possible_build_paths],
                 'frontend_exists': os.path.exists(os.path.join(project_root, 'frontend')),
-                'cwd': os.getcwd()
             }
             return jsonify(debug_info), 200
     
