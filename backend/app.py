@@ -82,10 +82,15 @@ def create_app():
         
         # Serve static files from React build
         if frontend_build_path and os.path.exists(frontend_build_path):
-            if path != "" and os.path.exists(os.path.join(frontend_build_path, path)):
-                return send_from_directory(frontend_build_path, path)
-            else:
-                return send_from_directory(frontend_build_path, 'index.html')
+            # If path is not empty, try to serve the file
+            if path != "":
+                file_path = os.path.join(frontend_build_path, path)
+                if os.path.exists(file_path) and os.path.isfile(file_path):
+                    return send_from_directory(frontend_build_path, path)
+                # If file doesn't exist, fall through to serve index.html (for React Router)
+            
+            # Serve index.html for all non-API routes (React Router handles routing)
+            return send_from_directory(frontend_build_path, 'index.html')
         else:
             # Debug info: show what paths were checked
             debug_info = {
