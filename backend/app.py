@@ -76,8 +76,16 @@ def create_app():
             else:
                 return send_from_directory(frontend_build_path, 'index.html')
         else:
-            # Fallback if build folder doesn't exist
-            return jsonify({'message': 'NoteSpace API - Frontend not built'}), 200
+            # Debug info: show what paths were checked
+            debug_info = {
+                'message': 'NoteSpace API - Frontend not built',
+                'project_root': project_root,
+                'frontend_build_path': frontend_build_path,
+                'build_exists': os.path.exists(frontend_build_path),
+                'frontend_exists': os.path.exists(os.path.join(project_root, 'frontend')),
+                'cwd': os.getcwd()
+            }
+            return jsonify(debug_info), 200
     
     return app
 
