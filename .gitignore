@@ -26,6 +26,7 @@ uploads/
 *.pdf
 *.docx
 *.txt
+!requirements.txt
 
 # Environment
 .env
