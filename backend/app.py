@@ -26,18 +26,7 @@ def create_app():
             break
     
     # Configure Flask with static folder for React build
-    # static_url_path='' means serve files from root, but we need to handle /static/ manually
     app = Flask(__name__)
-    
-    # Add static file route for React build static files (must be registered before catch-all)
-    @app.route('/static/<path:filename>')
-    def static_files(filename):
-        # Try all possible build paths
-        for build_path in possible_build_paths:
-            static_file = os.path.join(build_path, 'static', filename)
-            if os.path.exists(static_file) and os.path.isfile(static_file):
-                return send_from_directory(os.path.join(build_path, 'static'), filename)
-        return jsonify({'error': 'Static file not found'}), 404
     
     # Configuration
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -84,12 +73,22 @@ def create_app():
     app.register_blueprint(topic_bp, url_prefix='/api/topics')
     app.register_blueprint(upload_bp, url_prefix='/api/upload')
     
+    # Serve static files from React build (CSS, JS, etc.) - must be before catch-all
+    @app.route('/static/<path:filename>')
+    def static_files(filename):
+        # Try all possible build paths
+        for build_path in possible_build_paths:
+            static_file = os.path.join(build_path, 'static', filename)
+            if os.path.exists(static_file) and os.path.isfile(static_file):
+                return send_from_directory(os.path.join(build_path, 'static'), filename)
+        return jsonify({'error': 'Static file not found', 'filename': filename}), 404
+    
     # Serve React frontend - catch-all route for React Router (must be last)
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
     def serve_frontend(path):
-        # Don't serve frontend for API routes (they should be handled by blueprints above)
-        if path.startswith('api/'):
+        # Don't serve frontend for API routes or static routes (they should be handled above)
+        if path.startswith('api/') or path.startswith('static/'):
             return jsonify({'error': 'Not found'}), 404
         
         # Serve index.html for all non-API routes (React Router handles routing)
