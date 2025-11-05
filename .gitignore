@@ -1,0 +1,46 @@
+# Logs
+backend.log
+frontend.log
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.db
+*.sqlite
+*.sqlite3
+*.db.backup.*
+
+# Flask
+instance/
+.webassets-cache
+
+# Uploads
+uploads/
+*.pdf
+*.docx
+*.txt
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node modules
+node_modules/
+frontend/node_modules/
+

@@ -1,0 +1,15 @@
+{
+  "name": "notespace",
+  "version": "1.0.0",
+  "description": "NoteSpace - Collaborative note-taking platform",
+  "scripts": {
+    "start": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "backend": "cd backend && python3 app.py",
+    "frontend": "cd frontend && npm start",
+    "install-all": "pip install -r requirements.txt && cd frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
+
