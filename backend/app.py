@@ -14,19 +14,23 @@ def create_app():
     
     # Find frontend build path
     possible_build_paths = [
-        os.path.abspath(os.path.join(project_root, 'frontend', 'build')),
-        os.path.abspath(os.path.join(os.getcwd(), 'frontend', 'build')),
-        os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'build')),
+        os.path.join(project_root, 'frontend', 'build'),
+        os.path.join(os.getcwd(), 'frontend', 'build'),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'build'),
     ]
     
     frontend_build_path = None
     for build_path in possible_build_paths:
-        if os.path.exists(build_path):
-            frontend_build_path = build_path
+        abs_path = os.path.abspath(build_path)
+        if os.path.exists(abs_path):
+            frontend_build_path = abs_path
             break
     
-    # Configure Flask with static folder for React build
-    app = Flask(__name__)
+    # Configure Flask with static folder for React build (following Render pattern)
+    if frontend_build_path:
+        app = Flask(__name__, static_folder=frontend_build_path, static_url_path="/")
+    else:
+        app = Flask(__name__)
     
     # Configuration
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -68,48 +72,35 @@ def create_app():
     from backend.topic_routes import topic_bp
     from backend.upload_routes import upload_bp
     
-    # Register blueprints
+    # Register blueprints (API routes must come before catch-all)
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(topic_bp, url_prefix='/api/topics')
     app.register_blueprint(upload_bp, url_prefix='/api/upload')
     
-    # Serve static files from React build (CSS, JS, etc.) - must be before catch-all
-    @app.route('/static/<path:filename>')
-    def static_files(filename):
-        # Try all possible build paths
-        for build_path in possible_build_paths:
-            static_file = os.path.join(build_path, 'static', filename)
-            if os.path.exists(static_file) and os.path.isfile(static_file):
-                response = send_from_directory(os.path.join(build_path, 'static'), filename)
-                # Ensure proper MIME types for JavaScript and CSS
-                if filename.endswith('.js'):
-                    response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
-                elif filename.endswith('.css'):
-                    response.headers['Content-Type'] = 'text/css; charset=utf-8'
-                return response
-        return jsonify({'error': 'Static file not found', 'filename': filename, 'checked_paths': [os.path.join(p, 'static', filename) for p in possible_build_paths]}), 404
-    
-    # Serve React frontend - catch-all route for React Router (must be last)
+    # Serve React frontend - catch-all route for all non-API routes (must be last)
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
-    def serve_frontend(path):
-        # Don't serve frontend for API routes or static routes (they should be handled above)
-        if path.startswith('api/') or path.startswith('static/'):
+    def serve(path):
+        # Don't serve frontend for API routes
+        if path.startswith('api/'):
             return jsonify({'error': 'Not found'}), 404
         
-        # Serve index.html for all non-API routes (React Router handles routing)
-        # Flask will automatically serve static files from static_folder
+        # Serve React build files
         if frontend_build_path and os.path.exists(frontend_build_path):
-            return send_from_directory(frontend_build_path, 'index.html')
+            # If path exists as a file in build folder, serve it
+            if path != "" and os.path.exists(os.path.join(frontend_build_path, path)):
+                return send_from_directory(frontend_build_path, path)
+            # Otherwise serve index.html (React Router handles routing)
+            else:
+                return send_from_directory(frontend_build_path, 'index.html')
         else:
-            # Debug info: show what paths were checked
+            # Debug info if build folder not found
             debug_info = {
                 'message': 'NoteSpace API - Frontend not built',
                 'project_root': project_root,
                 'cwd': os.getcwd(),
                 'checked_paths': possible_build_paths,
-                'build_exists': [os.path.exists(p) for p in possible_build_paths],
-                'frontend_exists': os.path.exists(os.path.join(project_root, 'frontend')),
+                'build_exists': [os.path.exists(os.path.abspath(p)) for p in possible_build_paths],
             }
             return jsonify(debug_info), 200
     
