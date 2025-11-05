@@ -29,11 +29,15 @@ def create_app():
     # static_url_path='' means serve files from root, but we need to handle /static/ manually
     app = Flask(__name__)
     
-    # Add static file route for React build static files
-    if frontend_build_path and os.path.exists(frontend_build_path):
-        @app.route('/static/<path:filename>')
-        def static_files(filename):
-            return send_from_directory(os.path.join(frontend_build_path, 'static'), filename)
+    # Add static file route for React build static files (must be registered before catch-all)
+    @app.route('/static/<path:filename>')
+    def static_files(filename):
+        # Try all possible build paths
+        for build_path in possible_build_paths:
+            static_file = os.path.join(build_path, 'static', filename)
+            if os.path.exists(static_file) and os.path.isfile(static_file):
+                return send_from_directory(os.path.join(build_path, 'static'), filename)
+        return jsonify({'error': 'Static file not found'}), 404
     
     # Configuration
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
