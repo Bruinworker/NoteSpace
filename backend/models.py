@@ -58,6 +58,9 @@ class Note(db.Model):
     file_size = db.Column(db.Integer, nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    # Relationships
+    meta_document = db.relationship('MetaDocument', backref='note', uselist=False, cascade='all, delete-orphan')
+    
     def to_dict(self):
         return {
             'id': self.id,
@@ -68,6 +71,40 @@ class Note(db.Model):
             'file_size': self.file_size,
             'uploaded_at': self.uploaded_at.isoformat(),
             'uploader_name': self.user.name if self.user else 'Anonymous',
+            'topic_name': self.topic.name if self.topic else None
+        }
+
+class MetaDocument(db.Model):
+    __tablename__ = 'meta_documents'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    topic_id = db.Column(db.Integer, db.ForeignKey('topics.id'), nullable=False)
+    note_id = db.Column(db.Integer, db.ForeignKey('notes.id'), nullable=True)  # Optional: can be for a single note or combined
+    synthesized_content = db.Column(db.Text, nullable=False)  # The LLM-generated meta document
+    source_filenames = db.Column(db.Text, nullable=False)  # JSON array of source file names
+    chunk_count = db.Column(db.Integer, default=0)
+    token_count = db.Column(db.Integer, default=0)
+    processing_status = db.Column(db.String(50), default='pending')  # pending, processing, completed, failed
+    error_message = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    topic = db.relationship('Topic', backref='meta_documents')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'topic_id': self.topic_id,
+            'note_id': self.note_id,
+            'synthesized_content': self.synthesized_content,
+            'source_filenames': self.source_filenames,
+            'chunk_count': self.chunk_count,
+            'token_count': self.token_count,
+            'processing_status': self.processing_status,
+            'error_message': self.error_message,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
             'topic_name': self.topic.name if self.topic else None
         }
 

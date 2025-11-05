@@ -25,6 +25,7 @@ chmod +x start.sh
 **Option 2: Use npm scripts**
 ```bash
 # Install root dependencies (first time only)
+
 npm install
 
 # Install all dependencies

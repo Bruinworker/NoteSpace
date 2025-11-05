@@ -88,11 +88,13 @@ def create_app():
     from backend.auth_routes import auth_bp
     from backend.topic_routes import topic_bp
     from backend.upload_routes import upload_bp
+    from backend.meta_document_routes import meta_document_bp
     
     # Register blueprints (API routes must come before catch-all)
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(topic_bp, url_prefix='/api/topics')
     app.register_blueprint(upload_bp, url_prefix='/api/upload')
+    app.register_blueprint(meta_document_bp, url_prefix='/api/meta-documents')
     
     # Serve React frontend - catch-all route for all non-API routes (must be last)
     @app.route('/', defaults={'path': ''})
