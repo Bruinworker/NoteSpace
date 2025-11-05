@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from backend.database import db
@@ -59,9 +59,25 @@ def create_app():
     app.register_blueprint(topic_bp, url_prefix='/api/topics')
     app.register_blueprint(upload_bp, url_prefix='/api/upload')
     
-    @app.route('/')
-    def index():
-        return {'message': 'NoteSpace API'}
+    # Serve React frontend (only for non-API routes)
+    frontend_build_path = os.path.join(project_root, 'frontend', 'build')
+    
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_frontend(path):
+        # Don't serve frontend for API routes (they should be handled by blueprints above)
+        if path.startswith('api/'):
+            return jsonify({'error': 'Not found'}), 404
+        
+        # Serve static files from React build
+        if os.path.exists(frontend_build_path):
+            if path != "" and os.path.exists(os.path.join(frontend_build_path, path)):
+                return send_from_directory(frontend_build_path, path)
+            else:
+                return send_from_directory(frontend_build_path, 'index.html')
+        else:
+            # Fallback if build folder doesn't exist
+            return jsonify({'message': 'NoteSpace API - Frontend not built'}), 200
     
     return app
 
