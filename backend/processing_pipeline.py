@@ -24,6 +24,7 @@ def process_topic_files(topic_id: int, upload_folder: str = None) -> Dict[str, a
     
     Args:
         topic_id: ID of the topic to process
+        upload_folder: Path to upload folder (optional)
         
     Returns:
         Dict with status and result/error message

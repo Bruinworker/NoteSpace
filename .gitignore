@@ -15,7 +15,6 @@ ENV/
 *.db
 *.sqlite
 *.sqlite3
-*.db.backup.*
 
 # Flask
 instance/
@@ -26,7 +25,6 @@ uploads/
 *.pdf
 *.docx
 *.txt
-!requirements.txt
 
 # Environment
 .env
@@ -40,8 +38,4 @@ uploads/
 # OS
 .DS_Store
 Thumbs.db
-
-# Node modules
-node_modules/
-frontend/node_modules/
 
