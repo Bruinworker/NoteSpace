@@ -60,11 +60,11 @@ def create_app():
     app.register_blueprint(upload_bp, url_prefix='/api/upload')
     
     # Serve React frontend (only for non-API routes)
-    # Try multiple possible paths for the build folder
+    # Try multiple possible paths for the build folder (use absolute paths)
     possible_build_paths = [
-        os.path.join(project_root, 'frontend', 'build'),
-        os.path.join(os.getcwd(), 'frontend', 'build'),
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'build'),
+        os.path.abspath(os.path.join(project_root, 'frontend', 'build')),
+        os.path.abspath(os.path.join(os.getcwd(), 'frontend', 'build')),
+        os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'build')),
     ]
     
     frontend_build_path = None
