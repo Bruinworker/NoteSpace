@@ -869,6 +869,58 @@ const styles = {
     padding: '0.75rem',
     borderBottom: '1px solid #e0e0e0',
     color: '#666'
+  },
+  metaDocCard: {
+    backgroundColor: '#fff',
+    border: '1px solid #e0e0e0',
+    borderRadius: '8px',
+    padding: '1.5rem',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+  },
+  metaDocContent: {
+    backgroundColor: '#f8f9fa',
+    border: '1px solid #e0e0e0',
+    borderRadius: '4px',
+    padding: '1rem',
+    marginTop: '1rem'
+  },
+  processButton: {
+    padding: '0.5rem 1rem',
+    backgroundColor: '#007bff',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    fontWeight: '500'
+  },
+  downloadButton: {
+    padding: '0.5rem 1rem',
+    backgroundColor: '#28a745',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    fontWeight: '500'
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
+    cursor: 'not-allowed'
+  },
+  toggleButton: {
+    padding: '0.25rem 0.75rem',
+    backgroundColor: 'transparent',
+    border: '1px solid #007bff',
+    color: '#007bff',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.85rem'
+  },
+  statusMessage: {
+    padding: '0.5rem',
+    color: '#666',
+    fontSize: '0.9rem'
   }
 };
 
