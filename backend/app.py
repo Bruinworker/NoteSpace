@@ -67,6 +67,23 @@ def create_app():
     # Import models to register them with SQLAlchemy
     from backend import models
     
+    # Initialize database tables (important for production deployment)
+    with app.app_context():
+        try:
+            db.create_all()
+            
+            # Create default "cs35l" topic if it doesn't exist
+            from backend.models import Topic
+            cs35l_topic = Topic.query.filter_by(name='cs35l').first()
+            if not cs35l_topic:
+                cs35l_topic = Topic(name='cs35l')
+                db.session.add(cs35l_topic)
+                db.session.commit()
+                print("Created default topic: cs35l")
+        except Exception as e:
+            print(f"Database initialization error: {e}")
+            # Continue anyway - might be a schema issue
+    
     # Import routes
     from backend.auth_routes import auth_bp
     from backend.topic_routes import topic_bp
