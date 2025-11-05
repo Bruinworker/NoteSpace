@@ -73,23 +73,30 @@ def create_app():
             frontend_build_path = build_path
             break
     
-    @app.route('/', defaults={'path': ''})
-    @app.route('/<path:path>')
-    def serve_frontend(path):
-        # Don't serve frontend for API routes (they should be handled by blueprints above)
-        if path.startswith('api/'):
+    # Serve static files from React build (CSS, JS, etc.)
+    @app.route('/static/<path:filename>')
+    def serve_static(filename):
+        if frontend_build_path and os.path.exists(frontend_build_path):
+            static_file = os.path.join(frontend_build_path, 'static', filename)
+            if os.path.exists(static_file) and os.path.isfile(static_file):
+                return send_from_directory(os.path.join(frontend_build_path, 'static'), filename)
+        return jsonify({'error': 'File not found'}), 404
+    
+    # Serve other static assets (favicon, manifest, etc.)
+    @app.route('/<path:filename>')
+    def serve_other_static(filename):
+        # Don't serve frontend for API routes
+        if filename.startswith('api/'):
             return jsonify({'error': 'Not found'}), 404
         
-        # Serve static files from React build
         if frontend_build_path and os.path.exists(frontend_build_path):
-            # If path is not empty, try to serve the file
-            if path != "":
-                file_path = os.path.join(frontend_build_path, path)
-                if os.path.exists(file_path) and os.path.isfile(file_path):
-                    return send_from_directory(frontend_build_path, path)
-                # If file doesn't exist, fall through to serve index.html (for React Router)
-            
-            # Serve index.html for all non-API routes (React Router handles routing)
+            file_path = os.path.join(frontend_build_path, filename)
+            # Only serve actual files, not directories
+            if os.path.exists(file_path) and os.path.isfile(file_path):
+                return send_from_directory(frontend_build_path, filename)
+        
+        # For all other routes, serve index.html (React Router handles routing)
+        if frontend_build_path and os.path.exists(frontend_build_path):
             return send_from_directory(frontend_build_path, 'index.html')
         else:
             # Debug info: show what paths were checked
@@ -102,6 +109,14 @@ def create_app():
                 'frontend_exists': os.path.exists(os.path.join(project_root, 'frontend')),
             }
             return jsonify(debug_info), 200
+    
+    # Serve index.html for root route
+    @app.route('/')
+    def serve_index():
+        if frontend_build_path and os.path.exists(frontend_build_path):
+            return send_from_directory(frontend_build_path, 'index.html')
+        else:
+            return jsonify({'message': 'NoteSpace API - Frontend not built'}), 200
     
     return app
 
