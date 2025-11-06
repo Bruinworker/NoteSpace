@@ -1,7 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5001/api';
+// Use environment variable for API URL, fallback to relative URL for production or localhost for development
+// In production (Render), use relative URL so it works with same origin
+// In development, use localhost
+const getApiBaseUrl = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  // If we're in production (built app), use relative URL which will work with same origin
+  if (process.env.NODE_ENV === 'production') {
+    return '/api';
+  }
+  // Development fallback
+  return 'http://localhost:5001/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 // Create axios instance with interceptor to add token to each request
 const api = axios.create({

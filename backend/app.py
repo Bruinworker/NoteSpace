@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 from backend.database import db
@@ -61,9 +61,27 @@ def create_app():
     app.register_blueprint(upload_bp, url_prefix='/api/upload')
     app.register_blueprint(meta_document_bp, url_prefix='/api/meta-documents')
     
-    @app.route('/')
-    def index():
-        return {'message': 'NoteSpace API'}
+    # Serve React frontend
+    frontend_build_path = os.path.join(project_root, 'frontend', 'build')
+    
+    # Serve static files from React build (only if build exists)
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_frontend(path):
+        # Don't serve frontend for API routes (shouldn't happen due to blueprint registration order, but safety check)
+        if path.startswith('api/'):
+            return jsonify({'error': 'API endpoint not found'}), 404
+        
+        # Only serve frontend if build directory exists
+        if not os.path.exists(frontend_build_path):
+            return jsonify({'message': 'NoteSpace API', 'note': 'Frontend not built. Run "npm run build" in frontend directory.'}), 200
+        
+        # Serve static files
+        if path != "" and os.path.exists(os.path.join(frontend_build_path, path)):
+            return send_from_directory(frontend_build_path, path)
+        else:
+            # Serve index.html for React Router (client-side routing)
+            return send_from_directory(frontend_build_path, 'index.html')
     
     return app
 
@@ -100,5 +118,5 @@ if __name__ == '__main__':
             print(f"Database initialization error: {e}")
             # Continue anyway - might be a schema issue
     
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=int(os.environ.get('PORT', 5001)), host='0.0.0.0')
 
