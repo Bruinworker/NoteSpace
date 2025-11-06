@@ -24,7 +24,6 @@ def process_topic_files(topic_id: int, upload_folder: str = None) -> Dict[str, a
     
     Args:
         topic_id: ID of the topic to process
-        upload_folder: Path to upload folder (optional)
         
     Returns:
         Dict with status and result/error message
@@ -161,5 +160,4 @@ def process_single_file(note_id: int) -> Dict[str, any]:
         
     except Exception as e:
         return {'status': 'error', 'message': f'Processing failed: {str(e)}'}
-
 

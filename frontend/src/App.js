@@ -1,22 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-// Use environment variable for API URL, fallback to relative URL for production or localhost for development
-// In production (Render), use relative URL so it works with same origin
-// In development, use localhost
-const getApiBaseUrl = () => {
-  if (process.env.REACT_APP_API_URL) {
-    return process.env.REACT_APP_API_URL;
-  }
-  // If we're in production (built app), use relative URL which will work with same origin
-  if (process.env.NODE_ENV === 'production') {
-    return '/api';
-  }
-  // Development fallback
-  return 'http://localhost:5001/api';
-};
-
-const API_BASE_URL = getApiBaseUrl();
+// Use relative URL for same-domain deployment, or absolute URL if specified
+const API_BASE_URL = process.env.REACT_APP_API_URL || (window.location.origin + '/api');
 
 // Create axios instance with interceptor to add token to each request
 const api = axios.create({
@@ -57,7 +43,8 @@ function App() {
   const [showLogin, setShowLogin] = useState(true);
   const [topics, setTopics] = useState([]);
   const [notes, setNotes] = useState([]);
-  const [currentView, setCurrentView] = useState('upload'); // 'upload' or 'list'
+  const [metaDocuments, setMetaDocuments] = useState([]);
+  const [currentView, setCurrentView] = useState('upload'); // 'upload', 'list', or 'meta-documents'
 
   useEffect(() => {
     // Always fetch topics (no auth required)
@@ -67,6 +54,7 @@ function App() {
     if (token) {
       fetchCurrentUser();
       fetchNotes();
+      fetchMetaDocuments();
     }
   }, []);
 
@@ -98,6 +86,15 @@ function App() {
       setNotes(response.data.notes);
     } catch (error) {
       console.error('Error fetching notes:', error);
+    }
+  };
+
+  const fetchMetaDocuments = async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/meta-documents/list`);
+      setMetaDocuments(response.data.meta_documents || []);
+    } catch (error) {
+      console.error('Error fetching meta documents:', error);
     }
   };
 
@@ -247,6 +244,15 @@ function App() {
         >
           File List
         </button>
+        <button
+          style={{...styles.navButton, ...(currentView === 'meta-documents' ? styles.activeNavButton : {})}}
+          onClick={() => {
+            setCurrentView('meta-documents');
+            fetchMetaDocuments();
+          }}
+        >
+          Meta Documents
+        </button>
       </nav>
 
       <main style={styles.main}>
@@ -261,6 +267,13 @@ function App() {
         )}
         {currentView === 'list' && (
           <FileListView notes={notes} />
+        )}
+        {currentView === 'meta-documents' && (
+          <MetaDocumentsView 
+            topics={topics} 
+            metaDocuments={metaDocuments}
+            onRefresh={fetchMetaDocuments}
+          />
         )}
       </main>
     </div>
@@ -496,6 +509,162 @@ function FileListView({ notes }) {
   );
 }
 
+function MetaDocumentsView({ topics, metaDocuments, onRefresh }) {
+  const [processingTopics, setProcessingTopics] = useState({});
+  const [expandedDoc, setExpandedDoc] = useState(null);
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleString();
+  };
+
+  const handleProcessTopic = async (topicId) => {
+    setProcessingTopics({ ...processingTopics, [topicId]: true });
+    try {
+      const response = await axios.post(`${API_BASE_URL}/meta-documents/process/topic/${topicId}`);
+      alert('Processing started! This may take a few moments. Check back in a bit.');
+      // Poll for status updates
+      setTimeout(() => {
+        onRefresh();
+        setProcessingTopics({ ...processingTopics, [topicId]: false });
+      }, 2000);
+    } catch (error) {
+      alert(error.response?.data?.error || 'Failed to start processing');
+      setProcessingTopics({ ...processingTopics, [topicId]: false });
+    }
+  };
+
+  const handleDownload = async (metaDocId) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/meta-documents/${metaDocId}/download`, {
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `meta_document_${metaDocId}.txt`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      alert('Failed to download document');
+    }
+  };
+
+  const getMetaDocForTopic = (topicId) => {
+    return metaDocuments.find(doc => doc.topic_id === topicId && doc.processing_status === 'completed');
+  };
+
+  const getProcessingStatus = (topicId) => {
+    const doc = metaDocuments.find(doc => doc.topic_id === topicId);
+    return doc ? doc.processing_status : null;
+  };
+
+  return (
+    <div style={styles.listContainer}>
+      <h2 style={styles.sectionTitle}>Meta Documents</h2>
+      <p style={{ color: '#666', marginBottom: '1.5rem' }}>
+        Process uploaded files to generate synthesized meta documents using AI.
+      </p>
+      
+      {topics.length === 0 ? (
+        <p style={styles.emptyMessage}>No topics available. Create a topic first.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {topics.map(topic => {
+            const metaDoc = getMetaDocForTopic(topic.id);
+            const status = getProcessingStatus(topic.id);
+            const isProcessing = processingTopics[topic.id] || status === 'processing';
+            
+            return (
+              <div key={topic.id} style={styles.metaDocCard}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h3 style={{ margin: 0, color: '#333' }}>{topic.name}</h3>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    {status === 'completed' && metaDoc && (
+                      <button
+                        onClick={() => handleDownload(metaDoc.id)}
+                        style={styles.downloadButton}
+                      >
+                        Download
+                      </button>
+                    )}
+                    {status !== 'processing' && (
+                      <button
+                        onClick={() => handleProcessTopic(topic.id)}
+                        disabled={isProcessing}
+                        style={{
+                          ...styles.processButton,
+                          ...(isProcessing ? styles.disabledButton : {})
+                        }}
+                      >
+                        {isProcessing ? 'Processing...' : 'Process Files'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                {status === 'processing' && (
+                  <div style={styles.statusMessage}>
+                    <span style={{ color: '#007bff' }}>⏳ Processing files...</span>
+                  </div>
+                )}
+                
+                {status === 'failed' && (
+                  <div style={{ ...styles.statusMessage, backgroundColor: '#f8d7da', color: '#721c24', padding: '0.75rem', borderRadius: '4px' }}>
+                    <strong>Processing failed:</strong> {metaDocuments.find(doc => doc.topic_id === topic.id)?.error_message || 'Unknown error'}
+                  </div>
+                )}
+                
+                {status === 'completed' && metaDoc && (
+                  <div>
+                    <div style={{ marginBottom: '0.5rem', color: '#666', fontSize: '0.9rem' }}>
+                      <strong>Created:</strong> {formatDate(metaDoc.created_at)} • 
+                      <strong> Chunks:</strong> {metaDoc.chunk_count} • 
+                      <strong> Tokens:</strong> {metaDoc.token_count}
+                    </div>
+                    <div style={{ marginBottom: '0.5rem', color: '#666', fontSize: '0.9rem' }}>
+                      <strong>Source files:</strong> {JSON.parse(metaDoc.source_filenames || '[]').join(', ')}
+                    </div>
+                    <div style={styles.metaDocContent}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <strong>Synthesized Content:</strong>
+                        <button
+                          onClick={() => setExpandedDoc(expandedDoc === metaDoc.id ? null : metaDoc.id)}
+                          style={styles.toggleButton}
+                        >
+                          {expandedDoc === metaDoc.id ? 'Collapse' : 'Expand'}
+                        </button>
+                      </div>
+                      <div style={{
+                        maxHeight: expandedDoc === metaDoc.id ? 'none' : '200px',
+                        overflow: expandedDoc === metaDoc.id ? 'visible' : 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: expandedDoc === metaDoc.id ? 'pre-wrap' : 'pre-line',
+                        lineHeight: '1.6',
+                        color: '#333'
+                      }}>
+                        {metaDoc.synthesized_content}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {!status && (
+                  <div style={styles.statusMessage}>
+                    <span style={{ color: '#666' }}>No meta document yet. Click "Process Files" to generate one.</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const styles = {
   container: {
     minHeight: '100vh',
@@ -700,6 +869,58 @@ const styles = {
     padding: '0.75rem',
     borderBottom: '1px solid #e0e0e0',
     color: '#666'
+  },
+  metaDocCard: {
+    backgroundColor: '#fff',
+    border: '1px solid #e0e0e0',
+    borderRadius: '8px',
+    padding: '1.5rem',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+  },
+  metaDocContent: {
+    backgroundColor: '#f8f9fa',
+    border: '1px solid #e0e0e0',
+    borderRadius: '4px',
+    padding: '1rem',
+    marginTop: '1rem'
+  },
+  processButton: {
+    padding: '0.5rem 1rem',
+    backgroundColor: '#007bff',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    fontWeight: '500'
+  },
+  downloadButton: {
+    padding: '0.5rem 1rem',
+    backgroundColor: '#28a745',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    fontWeight: '500'
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
+    cursor: 'not-allowed'
+  },
+  toggleButton: {
+    padding: '0.25rem 0.75rem',
+    backgroundColor: 'transparent',
+    border: '1px solid #007bff',
+    color: '#007bff',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.85rem'
+  },
+  statusMessage: {
+    padding: '0.5rem',
+    color: '#666',
+    fontSize: '0.9rem'
   }
 };
 

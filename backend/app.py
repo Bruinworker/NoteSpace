@@ -9,10 +9,28 @@ from datetime import timedelta
 jwt = JWTManager()
 
 def create_app():
-    app = Flask(__name__)
-    
     # Get the project root directory
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
+    # Find frontend build path
+    possible_build_paths = [
+        os.path.join(project_root, 'frontend', 'build'),
+        os.path.join(os.getcwd(), 'frontend', 'build'),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'frontend', 'build'),
+    ]
+    
+    frontend_build_path = None
+    for build_path in possible_build_paths:
+        abs_path = os.path.abspath(build_path)
+        if os.path.exists(abs_path):
+            frontend_build_path = abs_path
+            break
+    
+    # Configure Flask with static folder for React build (following Render pattern)
+    if frontend_build_path:
+        app = Flask(__name__, static_folder=frontend_build_path, static_url_path="/")
+    else:
+        app = Flask(__name__)
     
     # Configuration
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
@@ -49,59 +67,61 @@ def create_app():
     # Import models to register them with SQLAlchemy
     from backend import models
     
+    # Initialize database tables (important for production deployment)
+    with app.app_context():
+        try:
+            db.create_all()
+            
+            # Create default "cs35l" topic if it doesn't exist
+            from backend.models import Topic
+            cs35l_topic = Topic.query.filter_by(name='cs35l').first()
+            if not cs35l_topic:
+                cs35l_topic = Topic(name='cs35l')
+                db.session.add(cs35l_topic)
+                db.session.commit()
+                print("Created default topic: cs35l")
+        except Exception as e:
+            print(f"Database initialization error: {e}")
+            # Continue anyway - might be a schema issue
+    
     # Import routes
     from backend.auth_routes import auth_bp
     from backend.topic_routes import topic_bp
     from backend.upload_routes import upload_bp
     from backend.meta_document_routes import meta_document_bp
     
-    # Register blueprints
+    # Register blueprints (API routes must come before catch-all)
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(topic_bp, url_prefix='/api/topics')
     app.register_blueprint(upload_bp, url_prefix='/api/upload')
     app.register_blueprint(meta_document_bp, url_prefix='/api/meta-documents')
     
-    # Serve React frontend (Scenario 2: Single container)
-    frontend_build_path = os.path.join(project_root, 'frontend', 'build')
-    
-    # Configure Flask to serve static files from React build
-    # This allows Flask to automatically serve files from frontend/build/static
-    if os.path.exists(frontend_build_path):
-        # Debug: Print build path on startup (helpful for Render debugging)
-        print(f"Frontend build path: {frontend_build_path}")
-        print(f"Build path exists: {os.path.exists(frontend_build_path)}")
-        if os.path.exists(frontend_build_path):
-            try:
-                print(f"Build contents: {os.listdir(frontend_build_path)}")
-                static_dir = os.path.join(frontend_build_path, 'static')
-                if os.path.exists(static_dir):
-                    print(f"Static dir exists: {os.path.exists(static_dir)}")
-                    print(f"Static dir contents: {os.listdir(static_dir)}")
-            except Exception as e:
-                print(f"Error listing build contents: {e}")
-    
-    # Serve React app - catch-all route for all non-API routes
+    # Serve React frontend - catch-all route for all non-API routes (must be last)
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
     def serve(path):
-        # Don't serve frontend for API routes (these are handled by blueprints)
+        # Don't serve frontend for API routes
         if path.startswith('api/'):
-            return jsonify({'error': 'API endpoint not found'}), 404
+            return jsonify({'error': 'Not found'}), 404
         
-        # Only serve frontend if build directory exists
-        if not os.path.exists(frontend_build_path):
-            return jsonify({
-                'message': 'NoteSpace API', 
-                'note': 'Frontend not built. Run "npm run build" in frontend directory.',
-                'build_path': frontend_build_path
-            }), 200
-        
-        # Serve static files (JS, CSS, images, etc.) if they exist
-        if path != "" and os.path.exists(os.path.join(frontend_build_path, path)):
-            return send_from_directory(frontend_build_path, path)
-        
-        # For all other routes (including root), serve index.html for React Router
-        return send_from_directory(frontend_build_path, 'index.html')
+        # Serve React build files
+        if frontend_build_path and os.path.exists(frontend_build_path):
+            # If path exists as a file in build folder, serve it
+            if path != "" and os.path.exists(os.path.join(frontend_build_path, path)):
+                return send_from_directory(frontend_build_path, path)
+            # Otherwise serve index.html (React Router handles routing)
+            else:
+                return send_from_directory(frontend_build_path, 'index.html')
+        else:
+            # Debug info if build folder not found
+            debug_info = {
+                'message': 'NoteSpace API - Frontend not built',
+                'project_root': project_root,
+                'cwd': os.getcwd(),
+                'checked_paths': possible_build_paths,
+                'build_exists': [os.path.exists(os.path.abspath(p)) for p in possible_build_paths],
+            }
+            return jsonify(debug_info), 200
     
     return app
 
@@ -138,5 +158,5 @@ if __name__ == '__main__':
             print(f"Database initialization error: {e}")
             # Continue anyway - might be a schema issue
     
-    app.run(debug=True, port=int(os.environ.get('PORT', 5001)), host='0.0.0.0')
+    app.run(debug=True, port=5001)
 

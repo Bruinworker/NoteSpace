@@ -2,6 +2,7 @@
 LLM service for text synthesis using OpenAI API
 """
 import os
+import tiktoken
 from openai import OpenAI
 from typing import List, Optional, Tuple
 
@@ -12,8 +13,6 @@ def get_openai_client():
     api_key = os.environ.get('OPENAI_API_KEY')
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
-    
-    # Use the new OpenAI SDK syntax (v1.0+) - no proxies parameter
     return OpenAI(api_key=api_key)
 
 
@@ -23,8 +22,8 @@ def chunk_text(text: str, max_chunk_size: int = 8000, overlap: int = 200) -> Lis
     
     Args:
         text: Text to chunk
-        max_chunk_size: Maximum tokens per chunk (estimated as characters / 4)
-        overlap: Number of tokens to overlap between chunks (estimated as characters / 4)
+        max_chunk_size: Maximum tokens per chunk
+        overlap: Number of tokens to overlap between chunks
         
     Returns:
         List of text chunks
@@ -32,24 +31,24 @@ def chunk_text(text: str, max_chunk_size: int = 8000, overlap: int = 200) -> Lis
     if not text:
         return []
     
-    # Character-based chunking (rough estimate: 1 token ≈ 4 characters)
-    char_per_token = 4
-    max_chars = max_chunk_size * char_per_token
-    overlap_chars = overlap * char_per_token
+    # Use tiktoken to count tokens accurately
+    encoding = tiktoken.encoding_for_model("gpt-4")
+    tokens = encoding.encode(text)
     
-    if len(text) <= max_chars:
+    if len(tokens) <= max_chunk_size:
         return [text]
     
     chunks = []
     start = 0
     
-    while start < len(text):
-        end = min(start + max_chars, len(text))
-        chunk = text[start:end]
-        chunks.append(chunk)
+    while start < len(tokens):
+        end = min(start + max_chunk_size, len(tokens))
+        chunk_tokens = tokens[start:end]
+        chunk_text = encoding.decode(chunk_tokens)
+        chunks.append(chunk_text)
         
         # Move start position with overlap
-        start = end - overlap_chars
+        start = end - overlap
     
     return chunks
 
@@ -90,7 +89,7 @@ Here are the document chunks:
 
 Please provide a synthesized, comprehensive document that combines all the information above in a clear and organized manner."""
 
-        # Call OpenAI API using the new SDK syntax
+        # Call OpenAI API
         response = client.chat.completions.create(
             model="gpt-4-turbo-preview",  # or "gpt-3.5-turbo" for cheaper option
             messages=[
@@ -102,7 +101,7 @@ Please provide a synthesized, comprehensive document that combines all the infor
         )
         
         synthesized_text = response.choices[0].message.content
-        total_tokens = response.usage.total_tokens if response.usage else 0
+        total_tokens = response.usage.total_tokens if hasattr(response, 'usage') else 0
         
         return synthesized_text, None, total_tokens
         
@@ -111,8 +110,12 @@ Please provide a synthesized, comprehensive document that combines all the infor
 
 
 def count_tokens(text: str) -> int:
-    """Count tokens in text using character-based estimation."""
-    # Rough estimate: 1 token ≈ 4 characters
-    return len(text) // 4
-
+    """Count tokens in text using tiktoken."""
+    try:
+        encoding = tiktoken.encoding_for_model("gpt-4")
+        tokens = encoding.encode(text)
+        return len(tokens)
+    except Exception:
+        # Fallback: rough estimate (1 token ≈ 4 characters)
+        return len(text) // 4
 
