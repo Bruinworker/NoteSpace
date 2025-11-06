@@ -15,11 +15,30 @@ except ImportError:
 
 # Initialize OpenAI client
 def get_openai_client():
-    """Get OpenAI client, using API key from environment."""
+    """Get OpenAI client, using API key from environment.
+    
+    Uses OpenAI SDK v1.0+ syntax: OpenAI(api_key=...)
+    Does NOT use proxies argument (removed in SDK v1.0+)
+    """
     api_key = os.environ.get('OPENAI_API_KEY')
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
-    return OpenAI(api_key=api_key)
+    
+    # Use only api_key parameter - no proxies or other deprecated args
+    # OpenAI SDK v1.0+ syntax
+    try:
+        client = OpenAI(api_key=api_key)
+        return client
+    except TypeError as e:
+        # Catch any unexpected keyword argument errors
+        error_msg = str(e)
+        if 'proxies' in error_msg.lower() or 'unexpected keyword' in error_msg.lower():
+            raise ValueError(
+                f"OpenAI client initialization error: {error_msg}. "
+                "Make sure you're using OpenAI SDK v1.0+ (openai>=1.0.0). "
+                "The 'proxies' argument is not supported in v1.0+."
+            ) from e
+        raise
 
 
 def chunk_text(text: str, max_chunk_size: int = 8000, overlap: int = 200) -> List[str]:
