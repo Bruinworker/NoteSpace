@@ -154,7 +154,18 @@ Please provide a synthesized, comprehensive document that combines all the infor
         return synthesized_text, None, total_tokens
         
     except Exception as e:
-        return None, f"Error calling LLM: {str(e)}", 0
+        # Provide more detailed error information
+        error_msg = str(e)
+        # If it's an OpenAI API error, try to extract more details
+        if hasattr(e, 'response') and hasattr(e.response, 'json'):
+            try:
+                error_data = e.response.json()
+                if 'error' in error_data:
+                    error_msg = f"OpenAI API Error: {error_data['error'].get('message', error_msg)}"
+            except:
+                pass
+        print(f"LLM Error: {error_msg}")  # Log for debugging
+        return None, f"Error calling LLM: {error_msg}", 0
 
 
 def count_tokens(text: str) -> int:
