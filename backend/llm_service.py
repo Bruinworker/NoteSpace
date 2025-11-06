@@ -139,11 +139,9 @@ Here are the document chunks:
 
 Please provide a synthesized, comprehensive document that combines all the information above in a clear and organized manner."""
 
-        # Call OpenAI API
-        # Use valid model names: gpt-4-turbo, gpt-4, or gpt-3.5-turbo
-        model_name = os.environ.get('OPENAI_MODEL', 'gpt-4-turbo')
+
         response = client.chat.completions.create(
-            model=model_name,
+            model="gpt-5",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that synthesizes educational documents."},
                 {"role": "user", "content": prompt}
