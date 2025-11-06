@@ -146,8 +146,7 @@ Please provide a synthesized, comprehensive document that combines all the infor
                 {"role": "system", "content": "You are a helpful assistant that synthesizes educational documents."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
-            max_tokens=4000
+            max_output_tokens=4000;
         )
         
         synthesized_text = response.choices[0].message.content
