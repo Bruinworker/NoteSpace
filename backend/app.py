@@ -67,9 +67,22 @@ def create_app():
     # Serve static files from React build (must be before catch-all route)
     @app.route('/static/<path:filename>')
     def serve_static(filename):
-        if os.path.exists(frontend_build_path):
-            return send_from_directory(os.path.join(frontend_build_path, 'static'), filename)
-        return jsonify({'error': 'Static file not found'}), 404
+        if not os.path.exists(frontend_build_path):
+            return jsonify({'error': 'Frontend build not found'}), 404
+        
+        static_file_path = os.path.join(frontend_build_path, 'static', filename)
+        if not os.path.exists(static_file_path):
+            return jsonify({'error': f'Static file not found: {filename}'}), 404
+        
+        response = send_from_directory(os.path.join(frontend_build_path, 'static'), filename)
+        
+        # Set proper MIME types for JavaScript and CSS
+        if filename.endswith('.js'):
+            response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
+        elif filename.endswith('.css'):
+            response.headers['Content-Type'] = 'text/css; charset=utf-8'
+        
+        return response
     
     # Serve other static assets (manifest.json, favicon, etc.)
     @app.route('/<path:filename>')
