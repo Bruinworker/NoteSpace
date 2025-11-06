@@ -64,15 +64,25 @@ def create_app():
     # Serve React frontend
     frontend_build_path = os.path.join(project_root, 'frontend', 'build')
     
-    # Serve static files from React build (must be before catch-all route)
+    # Debug: Print build path on startup (helpful for Render debugging)
+    print(f"Frontend build path: {frontend_build_path}")
+    print(f"Build path exists: {os.path.exists(frontend_build_path)}")
+    if os.path.exists(frontend_build_path):
+        print(f"Build contents: {os.listdir(frontend_build_path)}")
+        static_dir = os.path.join(frontend_build_path, 'static')
+        if os.path.exists(static_dir):
+            print(f"Static dir exists: {os.path.exists(static_dir)}")
+            print(f"Static dir contents: {os.listdir(static_dir)}")
+    
+    # Serve static files from React build (must be registered FIRST)
     @app.route('/static/<path:filename>')
     def serve_static(filename):
         if not os.path.exists(frontend_build_path):
-            return jsonify({'error': 'Frontend build not found'}), 404
+            return jsonify({'error': 'Frontend build not found', 'path': frontend_build_path}), 404
         
         static_file_path = os.path.join(frontend_build_path, 'static', filename)
         if not os.path.exists(static_file_path):
-            return jsonify({'error': f'Static file not found: {filename}'}), 404
+            return jsonify({'error': f'Static file not found: {filename}', 'searched_path': static_file_path}), 404
         
         response = send_from_directory(os.path.join(frontend_build_path, 'static'), filename)
         
@@ -84,11 +94,18 @@ def create_app():
         
         return response
     
-    # Serve other static assets (manifest.json, favicon, etc.)
-    @app.route('/<path:filename>')
-    def serve_other_static(filename):
+    # Serve index.html for root route (register BEFORE catch-all)
+    @app.route('/')
+    def serve_index():
+        if not os.path.exists(frontend_build_path):
+            return jsonify({'message': 'NoteSpace API', 'note': 'Frontend not built. Run "npm run build" in frontend directory.'}), 200
+        return send_from_directory(frontend_build_path, 'index.html')
+    
+    # Serve other static assets and React Router routes (catch-all, register LAST)
+    @app.route('/<path:path>')
+    def serve_react_app(path):
         # Don't serve frontend for API routes
-        if filename.startswith('api/'):
+        if path.startswith('api/'):
             return jsonify({'error': 'API endpoint not found'}), 404
         
         # Only serve frontend if build directory exists
@@ -96,17 +113,11 @@ def create_app():
             return jsonify({'message': 'NoteSpace API', 'note': 'Frontend not built. Run "npm run build" in frontend directory.'}), 200
         
         # Serve other static files (manifest.json, favicon, etc.)
-        if filename != "" and os.path.exists(os.path.join(frontend_build_path, filename)):
-            return send_from_directory(frontend_build_path, filename)
+        file_path = os.path.join(frontend_build_path, path)
+        if path != "" and os.path.exists(file_path) and os.path.isfile(file_path):
+            return send_from_directory(frontend_build_path, path)
         
         # Serve index.html for React Router (client-side routing)
-        return send_from_directory(frontend_build_path, 'index.html')
-    
-    # Serve index.html for root route
-    @app.route('/')
-    def serve_index():
-        if not os.path.exists(frontend_build_path):
-            return jsonify({'message': 'NoteSpace API', 'note': 'Frontend not built. Run "npm run build" in frontend directory.'}), 200
         return send_from_directory(frontend_build_path, 'index.html')
     
     return app
