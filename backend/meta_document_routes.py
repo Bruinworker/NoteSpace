@@ -49,9 +49,12 @@ def process_topic(topic_id):
         # Get upload folder from app config
         upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
         
+        # Copy app context for background thread
+        app_instance = current_app._get_current_object()
+        
         # Process files in background thread to avoid timeout
         def process_in_background():
-            with current_app.app_context():
+            with app_instance.app_context():
                 result = process_topic_files(topic_id, upload_folder=upload_folder)
                 # Result already handles status updates in the database
         
@@ -104,9 +107,12 @@ def process_note(note_id):
         # Get upload folder from app config
         upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
         
+        # Copy app context for background thread
+        app_instance = current_app._get_current_object()
+        
         # Process files in background thread to avoid timeout
         def process_in_background():
-            with current_app.app_context():
+            with app_instance.app_context():
                 result = process_single_file(note_id)
                 # Result already handles status updates in the database
         
