@@ -2,9 +2,15 @@
 LLM service for text synthesis using OpenAI API
 """
 import os
-import tiktoken
 from openai import OpenAI
 from typing import List, Optional, Tuple
+
+# Try to import tiktoken, but make it optional
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    TIKTOKEN_AVAILABLE = False
 
 
 # Initialize OpenAI client
@@ -31,24 +37,49 @@ def chunk_text(text: str, max_chunk_size: int = 8000, overlap: int = 200) -> Lis
     if not text:
         return []
     
-    # Use tiktoken to count tokens accurately
-    encoding = tiktoken.encoding_for_model("gpt-4")
-    tokens = encoding.encode(text)
+    # Use tiktoken if available, otherwise use character-based estimation
+    if TIKTOKEN_AVAILABLE:
+        try:
+            encoding = tiktoken.encoding_for_model("gpt-4")
+            tokens = encoding.encode(text)
+            
+            if len(tokens) <= max_chunk_size:
+                return [text]
+            
+            chunks = []
+            start = 0
+            
+            while start < len(tokens):
+                end = min(start + max_chunk_size, len(tokens))
+                chunk_tokens = tokens[start:end]
+                chunk_text = encoding.decode(chunk_tokens)
+                chunks.append(chunk_text)
+                
+                # Move start position with overlap
+                start = end - overlap
+            
+            return chunks
+        except Exception:
+            # Fall through to character-based chunking if tiktoken fails
+            pass
     
-    if len(tokens) <= max_chunk_size:
+    # Fallback: character-based chunking (1 token ≈ 4 characters)
+    char_chunk_size = max_chunk_size * 4
+    char_overlap_size = overlap * 4
+    
+    if len(text) <= char_chunk_size:
         return [text]
     
     chunks = []
     start = 0
     
-    while start < len(tokens):
-        end = min(start + max_chunk_size, len(tokens))
-        chunk_tokens = tokens[start:end]
-        chunk_text = encoding.decode(chunk_tokens)
+    while start < len(text):
+        end = min(start + char_chunk_size, len(text))
+        chunk_text = text[start:end]
         chunks.append(chunk_text)
         
         # Move start position with overlap
-        start = end - overlap
+        start = end - char_overlap_size
     
     return chunks
 
@@ -110,12 +141,16 @@ Please provide a synthesized, comprehensive document that combines all the infor
 
 
 def count_tokens(text: str) -> int:
-    """Count tokens in text using tiktoken."""
-    try:
-        encoding = tiktoken.encoding_for_model("gpt-4")
-        tokens = encoding.encode(text)
-        return len(tokens)
-    except Exception:
-        # Fallback: rough estimate (1 token ≈ 4 characters)
-        return len(text) // 4
+    """Count tokens in text using tiktoken if available, otherwise estimate."""
+    if TIKTOKEN_AVAILABLE:
+        try:
+            encoding = tiktoken.encoding_for_model("gpt-4")
+            tokens = encoding.encode(text)
+            return len(tokens)
+        except Exception:
+            # Fall through to character-based estimation
+            pass
+    
+    # Fallback: rough estimate (1 token ≈ 4 characters)
+    return len(text) // 4
 
