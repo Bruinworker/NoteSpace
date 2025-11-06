@@ -8,6 +8,7 @@ from backend.models import MetaDocument, Topic, Note
 from backend.processing_pipeline import process_topic_files, process_single_file
 import io
 import json
+import threading
 
 meta_document_bp = Blueprint('meta_document', __name__)
 
@@ -17,6 +18,7 @@ def process_topic(topic_id):
     """
     Trigger processing of all files for a topic.
     Creates or updates a meta document.
+    Processing happens asynchronously in background.
     """
     try:
         from flask import current_app
@@ -26,19 +28,42 @@ def process_topic(topic_id):
         if not topic:
             return jsonify({'error': 'Topic not found'}), 404
         
+        # Create or get meta document record first
+        meta_doc = MetaDocument.query.filter_by(topic_id=topic_id).order_by(
+            MetaDocument.created_at.desc()
+        ).first()
+        if not meta_doc:
+            meta_doc = MetaDocument(
+                topic_id=topic_id,
+                processing_status='pending',
+                synthesized_content='',
+                source_filenames='[]'
+            )
+            db.session.add(meta_doc)
+            db.session.commit()
+        
+        # Set status to processing
+        meta_doc.processing_status = 'processing'
+        db.session.commit()
+        
         # Get upload folder from app config
         upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
         
-        # Process files
-        result = process_topic_files(topic_id, upload_folder=upload_folder)
+        # Process files in background thread to avoid timeout
+        def process_in_background():
+            with current_app.app_context():
+                result = process_topic_files(topic_id, upload_folder=upload_folder)
+                # Result already handles status updates in the database
         
-        if result['status'] == 'error':
-            return jsonify({'error': result['message']}), 400
+        thread = threading.Thread(target=process_in_background)
+        thread.daemon = True
+        thread.start()
         
         return jsonify({
             'message': 'Processing started successfully',
-            'result': result
-        }), 200
+            'meta_document_id': meta_doc.id,
+            'status': 'processing'
+        }), 202  # 202 Accepted - processing started
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -48,23 +73,52 @@ def process_topic(topic_id):
 def process_note(note_id):
     """
     Trigger processing of a single file.
+    Processing happens asynchronously in background.
     """
     try:
+        from flask import current_app
+        
         # Verify note exists
         note = Note.query.get(note_id)
         if not note:
             return jsonify({'error': 'Note not found'}), 404
         
-        # Process file (uses topic-based processing)
-        result = process_single_file(note_id)
+        # Create or get meta document record first
+        meta_doc = MetaDocument.query.filter_by(topic_id=note.topic_id).order_by(
+            MetaDocument.created_at.desc()
+        ).first()
+        if not meta_doc:
+            meta_doc = MetaDocument(
+                topic_id=note.topic_id,
+                processing_status='pending',
+                synthesized_content='',
+                source_filenames='[]'
+            )
+            db.session.add(meta_doc)
+            db.session.commit()
         
-        if result['status'] == 'error':
-            return jsonify({'error': result['message']}), 400
+        # Set status to processing
+        meta_doc.processing_status = 'processing'
+        db.session.commit()
+        
+        # Get upload folder from app config
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+        
+        # Process files in background thread to avoid timeout
+        def process_in_background():
+            with current_app.app_context():
+                result = process_single_file(note_id)
+                # Result already handles status updates in the database
+        
+        thread = threading.Thread(target=process_in_background)
+        thread.daemon = True
+        thread.start()
         
         return jsonify({
             'message': 'Processing started successfully',
-            'result': result
-        }), 200
+            'meta_document_id': meta_doc.id,
+            'status': 'processing'
+        }), 202  # 202 Accepted - processing started
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
