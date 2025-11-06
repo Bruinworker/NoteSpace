@@ -1,5 +1,11 @@
 """
 API routes for meta document processing and retrieval
+
+MILESTONE 2: Backend Logic Complete
+- Async LLM processing with background threads
+- Fixed Flask app context for background processing
+- Error handling and logging implemented
+- Worker timeout issues resolved
 """
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -54,9 +60,25 @@ def process_topic(topic_id):
         
         # Process files in background thread to avoid timeout
         def process_in_background():
-            with app_instance.app_context():
-                result = process_topic_files(topic_id, upload_folder=upload_folder)
-                # Result already handles status updates in the database
+            try:
+                with app_instance.app_context():
+                    print(f"Starting background processing for topic {topic_id}")
+                    result = process_topic_files(topic_id, upload_folder=upload_folder)
+                    print(f"Background processing completed for topic {topic_id}: {result.get('status')}")
+                    # Result already handles status updates in the database
+            except Exception as e:
+                print(f"Error in background processing for topic {topic_id}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                # Update status to failed
+                with app_instance.app_context():
+                    meta_doc = MetaDocument.query.filter_by(topic_id=topic_id).order_by(
+                        MetaDocument.created_at.desc()
+                    ).first()
+                    if meta_doc:
+                        meta_doc.processing_status = 'failed'
+                        meta_doc.error_message = str(e)
+                        db.session.commit()
         
         thread = threading.Thread(target=process_in_background)
         thread.daemon = True
@@ -112,9 +134,27 @@ def process_note(note_id):
         
         # Process files in background thread to avoid timeout
         def process_in_background():
-            with app_instance.app_context():
-                result = process_single_file(note_id)
-                # Result already handles status updates in the database
+            try:
+                with app_instance.app_context():
+                    print(f"Starting background processing for note {note_id}")
+                    result = process_single_file(note_id)
+                    print(f"Background processing completed for note {note_id}: {result.get('status')}")
+                    # Result already handles status updates in the database
+            except Exception as e:
+                print(f"Error in background processing for note {note_id}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                # Update status to failed
+                with app_instance.app_context():
+                    note = Note.query.get(note_id)
+                    if note:
+                        meta_doc = MetaDocument.query.filter_by(topic_id=note.topic_id).order_by(
+                            MetaDocument.created_at.desc()
+                        ).first()
+                        if meta_doc:
+                            meta_doc.processing_status = 'failed'
+                            meta_doc.error_message = str(e)
+                            db.session.commit()
         
         thread = threading.Thread(target=process_in_background)
         thread.daemon = True
