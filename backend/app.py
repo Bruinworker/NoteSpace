@@ -96,6 +96,30 @@ def create_app():
     app.register_blueprint(upload_bp, url_prefix='/api/upload')
     app.register_blueprint(meta_document_bp, url_prefix='/api/meta-documents')
     
+    # Explicitly handle /static/ routes FIRST (before catch-all)
+    @app.route('/static/<path:filename>')
+    def serve_static(filename):
+        """Serve static files from React build directory with proper MIME types"""
+        if frontend_build_path and os.path.exists(frontend_build_path):
+            static_file_path = os.path.join(frontend_build_path, 'static', filename)
+            if os.path.exists(static_file_path):
+                response = send_from_directory(os.path.join(frontend_build_path, 'static'), filename)
+                # Set proper MIME types for JS and CSS files
+                if filename.endswith('.js'):
+                    response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
+                elif filename.endswith('.css'):
+                    response.headers['Content-Type'] = 'text/css; charset=utf-8'
+                elif filename.endswith('.json'):
+                    response.headers['Content-Type'] = 'application/json; charset=utf-8'
+                elif filename.endswith('.png'):
+                    response.headers['Content-Type'] = 'image/png'
+                elif filename.endswith('.jpg') or filename.endswith('.jpeg'):
+                    response.headers['Content-Type'] = 'image/jpeg'
+                elif filename.endswith('.svg'):
+                    response.headers['Content-Type'] = 'image/svg+xml'
+                return response
+        return jsonify({'error': 'Static file not found'}), 404
+    
     # Serve React frontend - catch-all route for all non-API routes (must be last)
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
@@ -103,6 +127,10 @@ def create_app():
         # Don't serve frontend for API routes
         if path.startswith('api/'):
             return jsonify({'error': 'Not found'}), 404
+        
+        # Don't interfere with static routes (already handled above)
+        if path.startswith('static/'):
+            return jsonify({'error': 'Static file not found'}), 404
         
         # Serve React build files
         if frontend_build_path and os.path.exists(frontend_build_path):
