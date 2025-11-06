@@ -61,63 +61,46 @@ def create_app():
     app.register_blueprint(upload_bp, url_prefix='/api/upload')
     app.register_blueprint(meta_document_bp, url_prefix='/api/meta-documents')
     
-    # Serve React frontend
+    # Serve React frontend (Scenario 2: Single container)
     frontend_build_path = os.path.join(project_root, 'frontend', 'build')
     
-    # Debug: Print build path on startup (helpful for Render debugging)
-    print(f"Frontend build path: {frontend_build_path}")
-    print(f"Build path exists: {os.path.exists(frontend_build_path)}")
+    # Configure Flask to serve static files from React build
+    # This allows Flask to automatically serve files from frontend/build/static
     if os.path.exists(frontend_build_path):
-        print(f"Build contents: {os.listdir(frontend_build_path)}")
-        static_dir = os.path.join(frontend_build_path, 'static')
-        if os.path.exists(static_dir):
-            print(f"Static dir exists: {os.path.exists(static_dir)}")
-            print(f"Static dir contents: {os.listdir(static_dir)}")
+        # Debug: Print build path on startup (helpful for Render debugging)
+        print(f"Frontend build path: {frontend_build_path}")
+        print(f"Build path exists: {os.path.exists(frontend_build_path)}")
+        if os.path.exists(frontend_build_path):
+            try:
+                print(f"Build contents: {os.listdir(frontend_build_path)}")
+                static_dir = os.path.join(frontend_build_path, 'static')
+                if os.path.exists(static_dir):
+                    print(f"Static dir exists: {os.path.exists(static_dir)}")
+                    print(f"Static dir contents: {os.listdir(static_dir)}")
+            except Exception as e:
+                print(f"Error listing build contents: {e}")
     
-    # Serve static files from React build (must be registered FIRST)
-    @app.route('/static/<path:filename>')
-    def serve_static(filename):
-        if not os.path.exists(frontend_build_path):
-            return jsonify({'error': 'Frontend build not found', 'path': frontend_build_path}), 404
-        
-        static_file_path = os.path.join(frontend_build_path, 'static', filename)
-        if not os.path.exists(static_file_path):
-            return jsonify({'error': f'Static file not found: {filename}', 'searched_path': static_file_path}), 404
-        
-        response = send_from_directory(os.path.join(frontend_build_path, 'static'), filename)
-        
-        # Set proper MIME types for JavaScript and CSS
-        if filename.endswith('.js'):
-            response.headers['Content-Type'] = 'application/javascript; charset=utf-8'
-        elif filename.endswith('.css'):
-            response.headers['Content-Type'] = 'text/css; charset=utf-8'
-        
-        return response
-    
-    # Serve index.html for root route (register BEFORE catch-all)
-    @app.route('/')
-    def serve_index():
-        if not os.path.exists(frontend_build_path):
-            return jsonify({'message': 'NoteSpace API', 'note': 'Frontend not built. Run "npm run build" in frontend directory.'}), 200
-        return send_from_directory(frontend_build_path, 'index.html')
-    
-    # Serve other static assets and React Router routes (catch-all, register LAST)
+    # Serve React app - catch-all route for all non-API routes
+    @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
-    def serve_react_app(path):
-        # Don't serve frontend for API routes
+    def serve(path):
+        # Don't serve frontend for API routes (these are handled by blueprints)
         if path.startswith('api/'):
             return jsonify({'error': 'API endpoint not found'}), 404
         
         # Only serve frontend if build directory exists
         if not os.path.exists(frontend_build_path):
-            return jsonify({'message': 'NoteSpace API', 'note': 'Frontend not built. Run "npm run build" in frontend directory.'}), 200
+            return jsonify({
+                'message': 'NoteSpace API', 
+                'note': 'Frontend not built. Run "npm run build" in frontend directory.',
+                'build_path': frontend_build_path
+            }), 200
         
-        # Serve other static files (manifest.json, favicon, etc.)
-        file_path = os.path.join(frontend_build_path, path)
-        if path != "" and os.path.exists(file_path) and os.path.isfile(file_path):
+        # Serve static files (JS, CSS, images, etc.) if they exist
+        if path != "" and os.path.exists(os.path.join(frontend_build_path, path)):
             return send_from_directory(frontend_build_path, path)
         
-        # Serve index.html for React Router (client-side routing)
+        # For all other routes (including root), serve index.html for React Router
         return send_from_directory(frontend_build_path, 'index.html')
     
     return app
