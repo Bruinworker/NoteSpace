@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { FiUploadCloud, FiList, FiFileText } from 'react-icons/fi';
 
 // Use relative URL for same-domain deployment, or absolute URL if specified
 const API_BASE_URL = process.env.REACT_APP_API_URL || (window.location.origin + '/api');
@@ -235,25 +236,32 @@ function App() {
         <button
           style={{...styles.navButton, ...(currentView === 'upload' ? styles.activeNavButton : {})}}
           onClick={() => setCurrentView('upload')}
+          title="Upload new files"    // 👈 tooltip!
         >
           Upload
         </button>
+
         <button
           style={{...styles.navButton, ...(currentView === 'list' ? styles.activeNavButton : {})}}
           onClick={() => setCurrentView('list')}
+          title="View all uploaded files"   // 👈 tooltip!
         >
           File List
         </button>
+
         <button
           style={{...styles.navButton, ...(currentView === 'meta-documents' ? styles.activeNavButton : {})}}
           onClick={() => {
             setCurrentView('meta-documents');
             fetchMetaDocuments();
           }}
+          title="Generate or view meta documents"   // 👈 tooltip!
         >
           Meta Documents
         </button>
       </nav>
+
+
 
       <main style={styles.main}>
         {currentView === 'upload' && (
@@ -381,15 +389,8 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
       <h2 style={styles.sectionTitle}>Upload File</h2>
       
       <div style={styles.formGroup}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <div style={{ marginBottom: '0.5rem' }}>
           <label style={styles.label}>Select Topic:</label>
-          <button
-            type="button"
-            onClick={() => setShowTopicForm(!showTopicForm)}
-            style={styles.createTopicButton}
-          >
-            {showTopicForm ? 'Cancel' : '+ New Topic'}
-          </button>
         </div>
         {showTopicForm ? (
           <form onSubmit={handleCreateTopic} style={{ display: 'flex', gap: '0.5rem' }}>
@@ -442,14 +443,18 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
         />
         <label htmlFor="file-input" style={styles.dropZoneLabel}>
           {dragActive ? (
-            <span>Drop file here</span>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Drop file here</div>
+              <div style={{ fontSize: '0.85rem' }}>We’ll start uploading right away</div>
+            </div>
           ) : (
-            <span>
-              <strong>Click to upload</strong> or drag and drop<br />
-              Any file type accepted
-            </span>
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>Click to upload or drag a file</div>
+              <div style={{ fontSize: '0.85rem' }}>PDFs, slides, docs — any file type is accepted</div>
+            </div>
           )}
         </label>
+
       </div>
 
       {uploadStatus && (
@@ -460,11 +465,21 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
           {uploadStatus}
         </div>
       )}
+
+      <button
+        type="button"
+        onClick={() => setShowTopicForm(!showTopicForm)}
+        style={styles.fabButton}
+      >
+        {showTopicForm ? 'Close' : '+ New Topic'}
+      </button>
     </div>
   );
 }
 
+
 function FileListView({ notes }) {
+  const [selectedNote, setSelectedNote] = useState(null);
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleString();
@@ -482,7 +497,7 @@ function FileListView({ notes }) {
       {notes.length === 0 ? (
         <p style={styles.emptyMessage}>No files uploaded yet.</p>
       ) : (
-        <table style={styles.table}>
+        <table style={styles.table} className="file-table">
           <thead>
             <tr>
               <th style={styles.th}>Filename</th>
@@ -494,7 +509,11 @@ function FileListView({ notes }) {
           </thead>
           <tbody>
             {notes.map(note => (
-              <tr key={note.id}>
+              <tr
+                key={note.id}
+                onClick={() => setSelectedNote(note)}
+                className="file-row"
+              >
                 <td style={styles.td}>{note.original_filename}</td>
                 <td style={styles.td}>{note.topic_name || `Topic #${note.topic_id}`}</td>
                 <td style={styles.td}>{note.uploader_name || 'Unknown'}</td>
@@ -665,24 +684,52 @@ function MetaDocumentsView({ topics, metaDocuments, onRefresh }) {
   );
 }
 
+const theme = {
+  colors: {
+    bg: '#0f172a',          // deep slate for header strip
+    page: '#f3f4f6',        // light gray page bg
+    surface: '#ffffff',
+    accent: '#4f46e5',      // indigo
+    accentSoft: 'rgba(79, 70, 229, 0.08)',
+    danger: '#dc2626',
+    textMain: '#111827',
+    textSubtle: '#6b7280',
+    border: '#e5e7eb'
+  },
+  radii: {
+    lg: '16px',
+    md: '10px',
+    pill: '999px'
+  },
+  shadows: {
+    soft: '0 18px 45px rgba(15,23,42,0.08)',
+    light: '0 4px 12px rgba(15,23,42,0.06)'
+  }
+};
+
 const styles = {
   container: {
     minHeight: '100vh',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: theme.colors.page,
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
   },
   header: {
-    backgroundColor: '#fff',
-    padding: '1rem 2rem',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    background: `linear-gradient(90deg, ${theme.colors.bg}, #020617)`,
+    padding: '1rem 2.5rem',
+    boxShadow: theme.shadows.soft,
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'center',
+    position: 'sticky',
+    top: 0,
+    zIndex: 20
   },
   title: {
     margin: 0,
-    color: '#333',
-    fontSize: '1.5rem'
+    color: '#e5e7eb',
+    fontSize: '1.35rem',
+    letterSpacing: '0.04em',
+    fontWeight: 600
   },
   headerRight: {
     display: 'flex',
@@ -690,70 +737,86 @@ const styles = {
     gap: '1rem'
   },
   userName: {
-    color: '#666',
+    color: '#e5e7eb',
     fontSize: '0.9rem'
   },
   logoutButton: {
-    padding: '0.5rem 1rem',
-    backgroundColor: '#dc3545',
+    padding: '0.45rem 1rem',
+    backgroundColor: theme.colors.danger,
     color: 'white',
     border: 'none',
-    borderRadius: '4px',
+    borderRadius: theme.radii.pill,
     cursor: 'pointer',
-    fontSize: '0.9rem'
+    fontSize: '0.9rem',
+    fontWeight: 500,
+    boxShadow: theme.shadows.light
   },
   nav: {
-    backgroundColor: '#fff',
-    padding: '0 2rem',
-    borderBottom: '1px solid #e0e0e0',
+    paddingTop: '0.75rem',
+    paddingInline: '2.5rem',
     display: 'flex',
-    gap: '1rem'
+    justifyContent: 'center'
+  },
+  navInner: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.pill,
+    boxShadow: theme.shadows.light,
+    padding: '0.25rem',
+    display: 'inline-flex',
+    gap: '0.25rem'
   },
   navButton: {
-    padding: '1rem 1.5rem',
+    padding: '0.55rem 1.35rem',
     backgroundColor: 'transparent',
     border: 'none',
-    borderBottom: '3px solid transparent',
+    borderRadius: theme.radii.pill,
     cursor: 'pointer',
-    fontSize: '1rem',
-    color: '#666',
-    transition: 'all 0.2s'
+    fontSize: '0.95rem',
+    color: theme.colors.textSubtle,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    transition: 'background 0.15s ease, color 0.15s ease, transform 0.05s ease'
   },
   activeNavButton: {
-    color: '#007bff',
-    borderBottomColor: '#007bff'
+    backgroundColor: theme.colors.accentSoft,
+    color: theme.colors.accent,
+    transform: 'translateY(-1px)'
   },
   main: {
     maxWidth: '1200px',
-    margin: '2rem auto',
-    padding: '0 2rem'
+    margin: '2.5rem auto',
+    padding: '0 2.5rem 3rem'
   },
   authContainer: {
-    maxWidth: '400px',
+    maxWidth: '420px',
     margin: '5rem auto',
-    backgroundColor: '#fff',
-    padding: '2rem',
-    borderRadius: '8px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+    backgroundColor: theme.colors.surface,
+    padding: '2.25rem',
+    borderRadius: theme.radii.lg,
+    boxShadow: theme.shadows.soft
   },
   tabs: {
     display: 'flex',
     marginBottom: '1.5rem',
-    borderBottom: '1px solid #e0e0e0'
+    backgroundColor: '#f9fafb',
+    borderRadius: theme.radii.pill,
+    padding: '0.15rem'
   },
   tab: {
     flex: 1,
-    padding: '0.75rem',
+    padding: '0.55rem 0.75rem',
     backgroundColor: 'transparent',
     border: 'none',
-    borderBottom: '2px solid transparent',
+    borderRadius: theme.radii.pill,
     cursor: 'pointer',
-    fontSize: '1rem',
-    color: '#666'
+    fontSize: '0.95rem',
+    color: theme.colors.textSubtle
   },
   activeTab: {
-    color: '#007bff',
-    borderBottomColor: '#007bff'
+    backgroundColor: theme.colors.surface,
+    color: theme.colors.accent,
+    boxShadow: theme.shadows.light
   },
   form: {
     display: 'flex',
@@ -762,115 +825,140 @@ const styles = {
   },
   input: {
     padding: '0.75rem',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '1rem'
+    border: `1px solid ${theme.colors.border}`,
+    borderRadius: theme.radii.md,
+    fontSize: '1rem',
+    outline: 'none'
   },
   button: {
     padding: '0.75rem',
-    backgroundColor: '#007bff',
+    backgroundColor: theme.colors.accent,
     color: 'white',
     border: 'none',
-    borderRadius: '4px',
+    borderRadius: theme.radii.md,
     cursor: 'pointer',
     fontSize: '1rem',
-    fontWeight: '500'
+    fontWeight: '500',
+    boxShadow: theme.shadows.light
   },
   uploadContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     padding: '2rem',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+    borderRadius: theme.radii.lg,
+    boxShadow: theme.shadows.soft,
+    position: 'relative',
+    paddingBottom: '3.5rem'
   },
+
   sectionTitle: {
     marginTop: 0,
-    marginBottom: '1.5rem',
-    color: '#333'
+    marginBottom: '1.25rem',
+    color: theme.colors.textMain,
+    fontSize: '1.25rem'
   },
   formGroup: {
-    marginBottom: '1.5rem'
+    marginBottom: '1.75rem'
   },
   label: {
     display: 'block',
     marginBottom: '0.5rem',
-    color: '#333',
+    color: theme.colors.textMain,
     fontWeight: '500'
   },
   select: {
     width: '100%',
     padding: '0.75rem',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
+    border: `1px solid ${theme.colors.border}`,
+    borderRadius: theme.radii.md,
     fontSize: '1rem'
   },
   dropZone: {
-    border: '2px dashed #ddd',
-    borderRadius: '8px',
+    border: `2px dashed ${theme.colors.border}`,
+    borderRadius: theme.radii.lg,
     padding: '3rem',
     textAlign: 'center',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    backgroundColor: '#fafafa'
+    backgroundColor: '#f9fafb'
   },
   dropZoneActive: {
-    borderColor: '#007bff',
-    backgroundColor: '#f0f7ff'
+    borderColor: theme.colors.accent,
+    backgroundColor: '#eef2ff'
   },
   dropZoneLabel: {
     cursor: 'pointer',
-    color: '#666'
+    color: theme.colors.textSubtle,
+    fontSize: '0.95rem'
   },
   statusMessage: {
     marginTop: '1rem',
     padding: '0.75rem',
-    borderRadius: '4px',
-    textAlign: 'center'
-  },
-  successMessage: {
-    backgroundColor: '#d4edda',
-    color: '#155724'
-  },
-  errorMessage: {
-    backgroundColor: '#f8d7da',
-    color: '#721c24'
-  },
-  createTopicButton: {
-    padding: '0.5rem 1rem',
-    backgroundColor: '#28a745',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
+    borderRadius: theme.radii.md,
+    textAlign: 'center',
     fontSize: '0.9rem'
   },
+  successMessage: {
+    backgroundColor: '#dcfce7',
+    color: '#166534'
+  },
+  errorMessage: {
+    backgroundColor: '#fee2e2',
+    color: '#b91c1c'
+  },
+  createTopicButton: {
+    padding: '0.4rem 0.9rem',
+    backgroundColor: '#22c55e',
+    color: 'white',
+    border: 'none',
+    borderRadius: theme.radii.pill,
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    fontWeight: 500
+  },
+  fabButton: {
+    position: 'absolute',
+    right: '1.75rem',
+    bottom: '1.5rem',
+    padding: '0.65rem 1.2rem',
+    borderRadius: theme.radii.pill,
+    backgroundColor: '#22c55e',
+    color: 'white',
+    border: 'none',
+    boxShadow: theme.shadows.light,
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    fontWeight: 500
+  },
+
   listContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: theme.colors.surface,
     padding: '2rem',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+    borderRadius: theme.radii.lg,
+    boxShadow: theme.shadows.soft
   },
   emptyMessage: {
     textAlign: 'center',
-    color: '#666',
+    color: theme.colors.textSubtle,
     padding: '2rem'
   },
   table: {
     width: '100%',
-    borderCollapse: 'collapse'
+    borderCollapse: 'collapse',
+    marginTop: '0.5rem'
   },
   th: {
-    padding: '0.75rem',
+    padding: '0.9rem 0.75rem',
     textAlign: 'left',
-    borderBottom: '2px solid #e0e0e0',
-    color: '#333',
-    fontWeight: '600'
+    borderBottom: `2px solid ${theme.colors.border}`,
+    color: theme.colors.textMain,
+    fontWeight: 600,
+    fontSize: '0.9rem'
   },
   td: {
-    padding: '0.75rem',
-    borderBottom: '1px solid #e0e0e0',
-    color: '#666'
+    padding: '0.8rem 0.75rem',
+    borderBottom: `1px solid ${theme.colors.border}`,
+    color: theme.colors.textSubtle,
+    fontSize: '0.9rem'
   }
 };
-
 export default App;
-
