@@ -266,7 +266,7 @@ function App() {
           />
         )}
         {currentView === 'list' && (
-          <FileListView notes={notes} />
+          <FileListView notes={notes} topics={topics} />
         )}
         {currentView === 'meta-documents' && (
           <MetaDocumentsView 
@@ -464,8 +464,9 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
   );
 }
 
-function FileListView({ notes }) {
+function FileListView({ notes, topics }) {
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
+  const [topicFilter, setTopicFilter] = useState('all'); // 'all' or topic_id
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -478,8 +479,16 @@ function FileListView({ notes }) {
     return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
   };
 
-  // Sort notes by uploaded_at based on sortOrder
-  const sortedNotes = [...notes].sort((a, b) => {
+  // Get unique topics from notes for filtering
+  const availableTopics = topics || [];
+
+  // Filter notes by topic
+  const filteredNotes = topicFilter === 'all' 
+    ? notes 
+    : notes.filter(note => note.topic_id.toString() === topicFilter);
+
+  // Sort filtered notes by uploaded_at based on sortOrder
+  const sortedNotes = [...filteredNotes].sort((a, b) => {
     const dateA = new Date(a.uploaded_at);
     const dateB = new Date(b.uploaded_at);
     return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
@@ -487,6 +496,31 @@ function FileListView({ notes }) {
 
   const toggleSortOrder = () => {
     setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
+  };
+
+  // Cycle through topic filters: all -> topic1 -> topic2 -> ... -> all
+  const cycleTopicFilter = () => {
+    if (topicFilter === 'all') {
+      // Go to first topic if available
+      if (availableTopics.length > 0) {
+        setTopicFilter(availableTopics[0].id.toString());
+      }
+    } else {
+      // Find current index and go to next, or back to 'all'
+      const currentIndex = availableTopics.findIndex(t => t.id.toString() === topicFilter);
+      if (currentIndex < availableTopics.length - 1) {
+        setTopicFilter(availableTopics[currentIndex + 1].id.toString());
+      } else {
+        setTopicFilter('all');
+      }
+    }
+  };
+
+  // Get current filter display name
+  const getTopicFilterDisplay = () => {
+    if (topicFilter === 'all') return 'All Topics';
+    const topic = availableTopics.find(t => t.id.toString() === topicFilter);
+    return topic ? topic.name : 'All Topics';
   };
 
   return (
@@ -499,7 +533,12 @@ function FileListView({ notes }) {
           <thead>
             <tr>
               <th style={styles.th}>Filename</th>
-              <th style={styles.th}>Topic</th>
+              <th 
+                style={{...styles.th, ...styles.sortableHeader}} 
+                onClick={cycleTopicFilter}
+              >
+                Topic: {getTopicFilterDisplay()} ⟳
+              </th>
               <th style={styles.th}>Uploader</th>
               <th style={styles.th}>Size</th>
               <th 
