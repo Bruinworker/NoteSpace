@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, send_from_directory, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from backend.database import db
-from backend.models import Note, Topic, User
+from backend.models import Note, Topic, User, Upvote
 import os
 import uuid
 
@@ -130,5 +130,44 @@ def get_note(note_id):
         return jsonify({'note': note.to_dict()}), 200
         
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@upload_bp.route('/<int:note_id>/upvote', methods=['POST'])
+@jwt_required()
+def upvote_note(note_id):
+    try:
+        user_id = int(get_jwt_identity())
+        
+        note = Note.query.get(note_id)
+        if not note:
+            return jsonify({'error': 'Note not found'}), 404
+        
+        # Check if user already upvoted this note
+        existing_upvote = Upvote.query.filter_by(user_id=user_id, note_id=note_id).first()
+        
+        if existing_upvote:
+            return jsonify({
+                'message': 'Already upvoted',
+                'upvote_count': note.upvote_count,
+                'already_upvoted': True
+            }), 200
+        
+        # Create new upvote
+        upvote = Upvote(user_id=user_id, note_id=note_id)
+        db.session.add(upvote)
+        
+        # Increment upvote count
+        note.upvote_count = (note.upvote_count or 0) + 1
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Upvoted successfully',
+            'upvote_count': note.upvote_count,
+            'already_upvoted': False
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 

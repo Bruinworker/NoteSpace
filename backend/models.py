@@ -56,10 +56,12 @@ class Note(db.Model):
     file_url = db.Column(db.String(500), nullable=False)
     original_filename = db.Column(db.String(255), nullable=False)
     file_size = db.Column(db.Integer, nullable=False)
+    upvote_count = db.Column(db.Integer, default=0)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
     meta_document = db.relationship('MetaDocument', backref='note', uselist=False, cascade='all, delete-orphan')
+    upvotes = db.relationship('Upvote', backref='note', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):
         return {
@@ -69,10 +71,23 @@ class Note(db.Model):
             'file_url': self.file_url,
             'original_filename': self.original_filename,
             'file_size': self.file_size,
+            'upvote_count': self.upvote_count,
             'uploaded_at': self.uploaded_at.isoformat(),
             'uploader_name': self.user.name if self.user else 'Anonymous',
             'topic_name': self.topic.name if self.topic else None
         }
+
+
+class Upvote(db.Model):
+    __tablename__ = 'upvotes'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    note_id = db.Column(db.Integer, db.ForeignKey('notes.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Unique constraint to prevent duplicate upvotes
+    __table_args__ = (db.UniqueConstraint('user_id', 'note_id', name='unique_user_note_upvote'),)
 
 class MetaDocument(db.Model):
     __tablename__ = 'meta_documents'

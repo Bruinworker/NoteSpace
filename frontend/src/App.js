@@ -152,6 +152,28 @@ function App() {
     setTopics([]);
   };
 
+  const handleUpvote = async (noteId) => {
+    try {
+      const response = await api.post(`/upload/${noteId}/upvote`);
+      const { upvote_count, already_upvoted } = response.data;
+
+      // Update the note's upvote count in state
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === noteId ? { ...n, upvote_count } : n
+        )
+      );
+
+      if (already_upvoted) {
+        console.log('You already upvoted this note');
+      }
+    } catch (error) {
+      console.error('Error upvoting note:', error);
+      const errorMsg = error.response?.data?.error || error.message || 'Unknown error';
+      alert(`Upvote failed: ${errorMsg}`);
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div style={styles.container}>
@@ -266,7 +288,7 @@ function App() {
           />
         )}
         {currentView === 'list' && (
-          <FileListView notes={notes} topics={topics} />
+          <FileListView notes={notes} topics={topics} onUpvote={handleUpvote} />
         )}
         {currentView === 'meta-documents' && (
           <MetaDocumentsView 
@@ -464,7 +486,7 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
   );
 }
 
-function FileListView({ notes, topics }) {
+function FileListView({ notes, topics, onUpvote }) {
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
   const [topicFilter, setTopicFilter] = useState('all'); // 'all' or topic_id
 
@@ -547,6 +569,7 @@ function FileListView({ notes, topics }) {
               >
                 Uploaded At {sortOrder === 'asc' ? '↑' : '↓'}
               </th>
+              <th style={styles.th}>Upvotes</th>
             </tr>
           </thead>
           <tbody>
@@ -557,6 +580,14 @@ function FileListView({ notes, topics }) {
                 <td style={styles.td}>{note.uploader_name || 'Unknown'}</td>
                 <td style={styles.td}>{formatFileSize(note.file_size)}</td>
                 <td style={styles.td}>{formatDate(note.uploaded_at)}</td>
+                <td style={styles.td}>
+                  <button
+                    onClick={() => onUpvote(note.id)}
+                    style={styles.upvoteButton}
+                  >
+                    ⬆ {note.upvote_count || 0}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -929,6 +960,19 @@ const styles = {
     ':hover': {
       backgroundColor: '#f0f0f0'
     }
+  },
+  upvoteButton: {
+    padding: '0.35rem 0.75rem',
+    borderRadius: '999px',
+    border: '1px solid #e0e0e0',
+    backgroundColor: '#f9fafb',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    fontWeight: '500',
+    transition: 'all 0.15s ease',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.25rem'
   },
   td: {
     padding: '0.75rem',
