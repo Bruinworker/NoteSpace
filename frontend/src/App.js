@@ -44,7 +44,8 @@ function App() {
   const [topics, setTopics] = useState([]);
   const [notes, setNotes] = useState([]);
   const [metaDocuments, setMetaDocuments] = useState([]);
-  const [currentView, setCurrentView] = useState('upload'); // 'upload', 'list', or 'meta-documents'
+  const [currentView, setCurrentView] = useState('upload'); // 'upload', 'list', 'meta-documents', or 'file-viewer'
+  const [selectedFile, setSelectedFile] = useState(null); // Currently viewed file
 
   useEffect(() => {
     // Always fetch topics (no auth required)
@@ -150,6 +151,16 @@ function App() {
     setIsAuthenticated(false);
     setNotes([]);
     setTopics([]);
+  };
+
+  const handleOpenFile = (note) => {
+    setSelectedFile(note);
+    setCurrentView('file-viewer');
+  };
+
+  const handleCloseFileViewer = () => {
+    setSelectedFile(null);
+    setCurrentView('list');
   };
 
   const handleUpvote = async (noteId) => {
@@ -275,6 +286,20 @@ function App() {
         >
           Meta Documents
         </button>
+        {selectedFile && (
+          <button
+            style={{...styles.navButton, ...(currentView === 'file-viewer' ? styles.activeNavButton : {}), marginLeft: 'auto'}}
+            onClick={() => setCurrentView('file-viewer')}
+          >
+            📄 {selectedFile.original_filename}
+            <span 
+              onClick={(e) => { e.stopPropagation(); handleCloseFileViewer(); }}
+              style={styles.closeTabButton}
+            >
+              ✕
+            </span>
+          </button>
+        )}
       </nav>
 
       <main style={styles.main}>
@@ -288,7 +313,10 @@ function App() {
           />
         )}
         {currentView === 'list' && (
-          <FileListView notes={notes} topics={topics} onUpvote={handleUpvote} />
+          <FileListView notes={notes} topics={topics} onUpvote={handleUpvote} onOpenFile={handleOpenFile} />
+        )}
+        {currentView === 'file-viewer' && selectedFile && (
+          <FileViewer file={selectedFile} onClose={handleCloseFileViewer} />
         )}
         {currentView === 'meta-documents' && (
           <MetaDocumentsView 
@@ -486,7 +514,7 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
   );
 }
 
-function FileListView({ notes, topics, onUpvote }) {
+function FileListView({ notes, topics, onUpvote, onOpenFile }) {
   const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
   const [topicFilter, setTopicFilter] = useState('all'); // 'all' or topic_id
 
@@ -575,7 +603,14 @@ function FileListView({ notes, topics, onUpvote }) {
           <tbody>
             {sortedNotes.map(note => (
               <tr key={note.id}>
-                <td style={styles.td}>{note.original_filename}</td>
+                <td style={styles.td}>
+                  <span
+                    onClick={() => onOpenFile(note)}
+                    style={styles.fileLink}
+                  >
+                    {note.original_filename}
+                  </span>
+                </td>
                 <td style={styles.td}>{note.topic_name || `Topic #${note.topic_id}`}</td>
                 <td style={styles.td}>{note.uploader_name || 'Unknown'}</td>
                 <td style={styles.td}>{formatFileSize(note.file_size)}</td>
@@ -593,6 +628,102 @@ function FileListView({ notes, topics, onUpvote }) {
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+function FileViewer({ file, onClose }) {
+  const [content, setContent] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fileUrl = `${API_BASE_URL}${file.file_url.replace('/api', '')}`;
+  const fileExtension = file.original_filename.split('.').pop().toLowerCase();
+
+  useEffect(() => {
+    const fetchContent = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        // For text-based files, fetch and display content
+        if (['txt', 'md', 'json', 'js', 'py', 'html', 'css', 'csv'].includes(fileExtension)) {
+          const response = await axios.get(fileUrl, { responseType: 'text' });
+          setContent(response.data);
+        } else {
+          // For other files, we'll show them in an iframe or as download
+          setContent(null);
+        }
+      } catch (err) {
+        setError('Failed to load file content');
+        console.error('Error loading file:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchContent();
+  }, [file, fileUrl, fileExtension]);
+
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  };
+
+  const isPreviewable = ['txt', 'md', 'json', 'js', 'py', 'html', 'css', 'csv', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp'].includes(fileExtension);
+  const isTextFile = ['txt', 'md', 'json', 'js', 'py', 'html', 'css', 'csv'].includes(fileExtension);
+  const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(fileExtension);
+  const isPdf = fileExtension === 'pdf';
+
+  return (
+    <div style={styles.fileViewerContainer}>
+      <div style={styles.fileViewerHeader}>
+        <div>
+          <h2 style={styles.fileViewerTitle}>{file.original_filename}</h2>
+          <div style={styles.fileViewerMeta}>
+            <span>Topic: {file.topic_name || 'Unknown'}</span>
+            <span style={{ margin: '0 1rem' }}>•</span>
+            <span>Uploaded by: {file.uploader_name || 'Anonymous'}</span>
+            <span style={{ margin: '0 1rem' }}>•</span>
+            <span>Size: {formatFileSize(file.file_size)}</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <a
+            href={fileUrl}
+            download={file.original_filename}
+            style={styles.downloadButton}
+          >
+            ⬇ Download
+          </a>
+          <button onClick={onClose} style={styles.closeButton}>
+            ✕ Close
+          </button>
+        </div>
+      </div>
+
+      <div style={styles.fileViewerContent}>
+        {loading ? (
+          <div style={styles.fileViewerLoading}>Loading file...</div>
+        ) : error ? (
+          <div style={styles.fileViewerError}>{error}</div>
+        ) : isTextFile && content ? (
+          <pre style={styles.fileViewerText}>{content}</pre>
+        ) : isImage ? (
+          <img src={fileUrl} alt={file.original_filename} style={styles.fileViewerImage} />
+        ) : isPdf ? (
+          <iframe
+            src={fileUrl}
+            title={file.original_filename}
+            style={styles.fileViewerIframe}
+          />
+        ) : (
+          <div style={styles.fileViewerNotSupported}>
+            <p>Preview not available for this file type (.{fileExtension})</p>
+            <p>Click "Download" to view this file.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -973,6 +1104,115 @@ const styles = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '0.25rem'
+  },
+  fileLink: {
+    color: '#007bff',
+    textDecoration: 'none',
+    fontWeight: '500',
+    cursor: 'pointer',
+    transition: 'color 0.15s ease'
+  },
+  closeTabButton: {
+    marginLeft: '0.5rem',
+    padding: '0.1rem 0.4rem',
+    borderRadius: '50%',
+    backgroundColor: 'transparent',
+    cursor: 'pointer',
+    fontSize: '0.75rem',
+    lineHeight: '1'
+  },
+  fileViewerContainer: {
+    backgroundColor: '#fff',
+    borderRadius: '8px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    height: 'calc(100vh - 200px)'
+  },
+  fileViewerHeader: {
+    padding: '1.5rem',
+    borderBottom: '1px solid #e0e0e0',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    backgroundColor: '#f9fafb'
+  },
+  fileViewerTitle: {
+    margin: 0,
+    fontSize: '1.25rem',
+    color: '#333'
+  },
+  fileViewerMeta: {
+    marginTop: '0.5rem',
+    fontSize: '0.85rem',
+    color: '#666'
+  },
+  fileViewerContent: {
+    flex: 1,
+    overflow: 'auto',
+    padding: '1rem',
+    backgroundColor: '#fafafa'
+  },
+  fileViewerText: {
+    margin: 0,
+    padding: '1rem',
+    backgroundColor: '#fff',
+    border: '1px solid #e0e0e0',
+    borderRadius: '4px',
+    fontSize: '0.9rem',
+    lineHeight: '1.6',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    fontFamily: 'monospace',
+    overflow: 'auto'
+  },
+  fileViewerImage: {
+    maxWidth: '100%',
+    maxHeight: '100%',
+    objectFit: 'contain',
+    display: 'block',
+    margin: '0 auto'
+  },
+  fileViewerIframe: {
+    width: '100%',
+    height: '100%',
+    border: 'none'
+  },
+  fileViewerLoading: {
+    textAlign: 'center',
+    padding: '3rem',
+    color: '#666'
+  },
+  fileViewerError: {
+    textAlign: 'center',
+    padding: '3rem',
+    color: '#dc3545'
+  },
+  fileViewerNotSupported: {
+    textAlign: 'center',
+    padding: '3rem',
+    color: '#666'
+  },
+  closeButton: {
+    padding: '0.5rem 1rem',
+    backgroundColor: '#dc3545',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.9rem'
+  },
+  downloadButton: {
+    padding: '0.5rem 1rem',
+    backgroundColor: '#007bff',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    textDecoration: 'none',
+    display: 'inline-block'
   },
   td: {
     padding: '0.75rem',

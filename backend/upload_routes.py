@@ -86,12 +86,13 @@ def upload_file():
         return jsonify({'error': str(e)}), 500
 
 @upload_bp.route('/files/<filename>', methods=['GET'])
-def download_file(filename):
+def view_file(filename):
+    """Serve file for viewing in browser (opens in new tab)"""
     try:
         return send_from_directory(
             current_app.config['UPLOAD_FOLDER'],
             filename,
-            as_attachment=True
+            as_attachment=False  # Display inline in browser instead of downloading
         )
     except Exception as e:
         return jsonify({'error': str(e)}), 500
