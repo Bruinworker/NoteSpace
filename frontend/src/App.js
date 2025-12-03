@@ -465,6 +465,8 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
 }
 
 function FileListView({ notes }) {
+  const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
+
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleString();
@@ -474,6 +476,17 @@ function FileListView({ notes }) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+  };
+
+  // Sort notes by uploaded_at based on sortOrder
+  const sortedNotes = [...notes].sort((a, b) => {
+    const dateA = new Date(a.uploaded_at);
+    const dateB = new Date(b.uploaded_at);
+    return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+  });
+
+  const toggleSortOrder = () => {
+    setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc');
   };
 
   return (
@@ -489,11 +502,16 @@ function FileListView({ notes }) {
               <th style={styles.th}>Topic</th>
               <th style={styles.th}>Uploader</th>
               <th style={styles.th}>Size</th>
-              <th style={styles.th}>Uploaded At</th>
+              <th 
+                style={{...styles.th, ...styles.sortableHeader}} 
+                onClick={toggleSortOrder}
+              >
+                Uploaded At {sortOrder === 'asc' ? '↑' : '↓'}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {notes.map(note => (
+            {sortedNotes.map(note => (
               <tr key={note.id}>
                 <td style={styles.td}>{note.original_filename}</td>
                 <td style={styles.td}>{note.topic_name || `Topic #${note.topic_id}`}</td>
@@ -864,6 +882,14 @@ const styles = {
     borderBottom: '2px solid #e0e0e0',
     color: '#333',
     fontWeight: '600'
+  },
+  sortableHeader: {
+    cursor: 'pointer',
+    userSelect: 'none',
+    transition: 'background-color 0.2s',
+    ':hover': {
+      backgroundColor: '#f0f0f0'
+    }
   },
   td: {
     padding: '0.75rem',
