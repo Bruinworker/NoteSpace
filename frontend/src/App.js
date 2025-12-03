@@ -4,6 +4,8 @@ import { FiUploadCloud, FiList, FiFileText } from 'react-icons/fi';
 
 // Use relative URL for same-domain deployment, or absolute URL if specified
 const API_BASE_URL = process.env.REACT_APP_API_URL || (window.location.origin + '/api');
+const BACKEND_BASE_URL =
+  process.env.REACT_APP_BACKEND_BASE_URL || 'http://localhost:5001';
 
 // Create axios instance with interceptor to add token to each request
 const api = axios.create({
@@ -98,6 +100,48 @@ function App() {
       console.error('Error fetching meta documents:', error);
     }
   };
+
+  const handleOpenNote = async (note) => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/upload/${note.id}`);
+      const updatedNote = response.data.note;
+
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === updatedNote.id ? { ...n, view_count: updatedNote.view_count } : n
+        )
+      );
+
+      // Open the file in the same tab from Flask backend
+      window.location.href = `${BACKEND_BASE_URL}${updatedNote.file_url}`;
+    } catch (error) {
+      console.error('Error opening note:', error);
+    }
+  };
+
+
+
+  const handleUpvote = async (noteId) => {
+    try {
+      // use api (has Authorization header from interceptor)
+      const response = await api.post(`/upload/${noteId}/upvote`);
+      const { upvote_count, already_upvoted } = response.data;
+
+      setNotes((prev) =>
+        prev.map((n) =>
+          n.id === noteId ? { ...n, upvote_count } : n
+        )
+      );
+
+      if (already_upvoted) {
+        console.log('User already upvoted this note');
+        // optional: show a toast / alert here
+      }
+    } catch (error) {
+      console.error('Error upvoting note:', error);
+    }
+  };
+
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -236,7 +280,7 @@ function App() {
         <button
           style={{...styles.navButton, ...(currentView === 'upload' ? styles.activeNavButton : {})}}
           onClick={() => setCurrentView('upload')}
-          title="Upload new files"    // 👈 tooltip!
+          title="Upload new files"
         >
           Upload
         </button>
@@ -244,7 +288,7 @@ function App() {
         <button
           style={{...styles.navButton, ...(currentView === 'list' ? styles.activeNavButton : {})}}
           onClick={() => setCurrentView('list')}
-          title="View all uploaded files"   // 👈 tooltip!
+          title="View all uploaded files"
         >
           File List
         </button>
@@ -255,13 +299,11 @@ function App() {
             setCurrentView('meta-documents');
             fetchMetaDocuments();
           }}
-          title="Generate or view meta documents"   // 👈 tooltip!
+          title="Generate or view meta documents"
         >
           Meta Documents
         </button>
       </nav>
-
-
 
       <main style={styles.main}>
         {currentView === 'upload' && (
@@ -274,7 +316,11 @@ function App() {
           />
         )}
         {currentView === 'list' && (
-          <FileListView notes={notes} />
+          <FileListView
+            notes={notes}
+            onOpenNote={handleOpenNote}
+            onUpvote={handleUpvote}
+          />
         )}
         {currentView === 'meta-documents' && (
           <MetaDocumentsView 
@@ -300,10 +346,8 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
   const handleDrag = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
+    if (e.type === 'dragenter' || e.type === 'dragleave' || e.type === 'dragover') {
+      setDragActive(e.type !== 'dragleave');
     }
   };
 
@@ -332,7 +376,6 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
 
     setCreatingTopic(true);
     try {
-      // Topics don't require auth anymore
       const response = await axios.post(`${API_BASE_URL}/topics/`, {
         name: newTopicName.trim()
       });
@@ -356,7 +399,6 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
       return;
     }
 
-    // No file type restrictions - allow any file type
     setUploading(true);
     setUploadStatus('Uploading...');
 
@@ -365,8 +407,7 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
     formData.append('topic_id', selectedTopic);
 
     try {
-      // Uploads don't require auth anymore
-      const response = await axios.post(`${API_BASE_URL}/upload/`, formData, {
+      await axios.post(`${API_BASE_URL}/upload/`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -454,7 +495,6 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
             </div>
           )}
         </label>
-
       </div>
 
       {uploadStatus && (
@@ -477,9 +517,7 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
   );
 }
 
-
-function FileListView({ notes }) {
-  const [selectedNote, setSelectedNote] = useState(null);
+function FileListView({ notes, onOpenNote, onUpvote }) {
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleString();
@@ -505,20 +543,45 @@ function FileListView({ notes }) {
               <th style={styles.th}>Uploader</th>
               <th style={styles.th}>Size</th>
               <th style={styles.th}>Uploaded At</th>
+              <th style={styles.th}>Views</th>
+              <th style={styles.th}>Upvotes</th>
             </tr>
           </thead>
           <tbody>
             {notes.map(note => (
               <tr
                 key={note.id}
-                onClick={() => setSelectedNote(note)}
+                onClick={() => onOpenNote(note)}
                 className="file-row"
+                style={{ cursor: 'pointer' }}
               >
                 <td style={styles.td}>{note.original_filename}</td>
                 <td style={styles.td}>{note.topic_name || `Topic #${note.topic_id}`}</td>
                 <td style={styles.td}>{note.uploader_name || 'Unknown'}</td>
                 <td style={styles.td}>{formatFileSize(note.file_size)}</td>
                 <td style={styles.td}>{formatDate(note.uploaded_at)}</td>
+                <td style={styles.td}>{note.view_count ?? 0}</td>
+                <td
+                  style={styles.td}
+                  onClick={(e) => e.stopPropagation()} // prevent triggering onOpenNote
+                >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUpvote(note.id);
+                    }}
+                    style={{
+                      padding: '0.25rem 0.6rem',
+                      borderRadius: '999px',
+                      border: `1px solid ${theme.colors.border}`,
+                      backgroundColor: '#f9fafb',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem'
+                    }}
+                  >
+                    ⬆ {note.upvote_count ?? 0}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -540,16 +603,15 @@ function MetaDocumentsView({ topics, metaDocuments, onRefresh }) {
   const handleProcessTopic = async (topicId) => {
     setProcessingTopics({ ...processingTopics, [topicId]: true });
     try {
-      const response = await axios.post(`${API_BASE_URL}/meta-documents/process/topic/${topicId}`);
+      await axios.post(`${API_BASE_URL}/meta-documents/process/topic/${topicId}`);
       alert('Processing started! This may take a few moments. Check back in a bit.');
-      // Poll for status updates
       setTimeout(() => {
         onRefresh();
-        setProcessingTopics({ ...processingTopics, [topicId]: false });
+        setProcessingTopics((prev) => ({ ...prev, [topicId]: false }));
       }, 2000);
     } catch (error) {
       alert(error.response?.data?.error || 'Failed to start processing');
-      setProcessingTopics({ ...processingTopics, [topicId]: false });
+      setProcessingTopics((prev) => ({ ...prev, [topicId]: false }));
     }
   };
 
@@ -686,10 +748,10 @@ function MetaDocumentsView({ topics, metaDocuments, onRefresh }) {
 
 const theme = {
   colors: {
-    bg: '#0f172a',          // deep slate for header strip
-    page: '#f3f4f6',        // light gray page bg
+    bg: '#0f172a',
+    page: '#f3f4f6',
     surface: '#ffffff',
-    accent: '#4f46e5',      // indigo
+    accent: '#4f46e5',
     accentSoft: 'rgba(79, 70, 229, 0.08)',
     danger: '#dc2626',
     textMain: '#111827',
@@ -849,7 +911,6 @@ const styles = {
     position: 'relative',
     paddingBottom: '3.5rem'
   },
-
   sectionTitle: {
     marginTop: 0,
     marginBottom: '1.25rem',
@@ -929,7 +990,6 @@ const styles = {
     fontSize: '0.9rem',
     fontWeight: 500
   },
-
   listContainer: {
     backgroundColor: theme.colors.surface,
     padding: '2rem',
@@ -959,6 +1019,50 @@ const styles = {
     borderBottom: `1px solid ${theme.colors.border}`,
     color: theme.colors.textSubtle,
     fontSize: '0.9rem'
+  },
+  metaDocCard: {
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.md,
+    padding: '1.25rem',
+    boxShadow: theme.shadows.light,
+    border: `1px solid ${theme.colors.border}`
+  },
+  downloadButton: {
+    padding: '0.35rem 0.8rem',
+    borderRadius: theme.radii.pill,
+    border: 'none',
+    backgroundColor: theme.colors.accent,
+    color: 'white',
+    cursor: 'pointer',
+    fontSize: '0.85rem'
+  },
+  processButton: {
+    padding: '0.35rem 0.8rem',
+    borderRadius: theme.radii.pill,
+    border: 'none',
+    backgroundColor: '#22c55e',
+    color: 'white',
+    cursor: 'pointer',
+    fontSize: '0.85rem'
+  },
+  disabledButton: {
+    opacity: 0.6,
+    cursor: 'not-allowed'
+  },
+  metaDocContent: {
+    marginTop: '0.75rem',
+    padding: '0.75rem',
+    borderRadius: theme.radii.md,
+    backgroundColor: '#f9fafb'
+  },
+  toggleButton: {
+    padding: '0.25rem 0.6rem',
+    borderRadius: theme.radii.pill,
+    border: `1px solid ${theme.colors.border}`,
+    backgroundColor: 'white',
+    cursor: 'pointer',
+    fontSize: '0.8rem'
   }
 };
+
 export default App;

@@ -2,6 +2,7 @@ from backend.database import db
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
+
 class User(db.Model):
     __tablename__ = 'users'
     
@@ -28,6 +29,7 @@ class User(db.Model):
             'created_at': self.created_at.isoformat()
         }
 
+
 class Topic(db.Model):
     __tablename__ = 'topics'
     
@@ -47,6 +49,7 @@ class Topic(db.Model):
             'created_at': self.created_at.isoformat()
         }
 
+
 class Note(db.Model):
     __tablename__ = 'notes'
     
@@ -57,6 +60,10 @@ class Note(db.Model):
     original_filename = db.Column(db.String(255), nullable=False)
     file_size = db.Column(db.Integer, nullable=False)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # NEW FIELDS
+    view_count = db.Column(db.Integer, nullable=False, default=0)
+    upvote_count = db.Column(db.Integer, nullable=False, default=0)
     
     # Relationships
     meta_document = db.relationship('MetaDocument', backref='note', uselist=False, cascade='all, delete-orphan')
@@ -71,8 +78,11 @@ class Note(db.Model):
             'file_size': self.file_size,
             'uploaded_at': self.uploaded_at.isoformat(),
             'uploader_name': self.user.name if self.user else 'Anonymous',
-            'topic_name': self.topic.name if self.topic else None
+            'topic_name': self.topic.name if self.topic else None,
+            'view_count': self.view_count or 0,
+            'upvote_count': self.upvote_count or 0
         }
+
 
 class MetaDocument(db.Model):
     __tablename__ = 'meta_documents'
@@ -108,3 +118,18 @@ class MetaDocument(db.Model):
             'topic_name': self.topic.name if self.topic else None
         }
 
+
+class NoteUpvote(db.Model):
+    __tablename__ = 'note_upvotes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    note_id = db.Column(db.Integer, db.ForeignKey('notes.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('note_id', 'user_id', name='uq_note_user_upvote'),
+    )
+
+    note = db.relationship('Note', backref='note_upvotes', lazy=True)
+    user = db.relationship('User', backref='note_upvotes', lazy=True)

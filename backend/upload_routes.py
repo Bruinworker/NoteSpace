@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, send_from_directory, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from backend.database import db
-from backend.models import Note, Topic, User
+from backend.models import Note, Topic, User, NoteUpvote
 import os
 import uuid
 
@@ -126,9 +126,57 @@ def get_note(note_id):
         
         if not note:
             return jsonify({'error': 'Note not found'}), 404
+
+        # 🔹 Increment view counter
+        note.view_count = (note.view_count or 0) + 1
+        db.session.commit()
         
         return jsonify({'note': note.to_dict()}), 200
         
     except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@upload_bp.route('/<int:note_id>/upvote', methods=['POST'])
+@jwt_required()  # require login to upvote
+def upvote_note(note_id):
+    try:
+        user_id = get_jwt_identity()
+        if not user_id:
+            return jsonify({'error': 'Authentication required'}), 401
+
+        note = Note.query.get(note_id)
+        if not note:
+            return jsonify({'error': 'Note not found'}), 404
+
+        # Check if this user already upvoted this note
+        existing = NoteUpvote.query.filter_by(
+            note_id=note_id,
+            user_id=user_id
+        ).first()
+
+        if existing:
+            # Already upvoted → don't increment again
+            return jsonify({
+                'note_id': note.id,
+                'upvote_count': note.upvote_count or 0,
+                'already_upvoted': True
+            }), 200
+
+        # First time upvoting → record it + increment counter
+        upvote = NoteUpvote(note_id=note_id, user_id=user_id)
+        db.session.add(upvote)
+
+        note.upvote_count = (note.upvote_count or 0) + 1
+        db.session.commit()
+
+        return jsonify({
+            'note_id': note.id,
+            'upvote_count': note.upvote_count,
+            'already_upvoted': False
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
