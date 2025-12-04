@@ -1,9 +1,22 @@
 """
-LLM service for text synthesis using OpenAI API
+LLM service for text synthesis using OpenAI API.
+
+This module provides functions for:
+- Text chunking for LLM processing
+- Synthesizing text chunks using OpenAI's API
+- Token counting utilities
 """
 import os
 from openai import OpenAI
 from typing import List, Optional, Tuple
+from backend.constants import (
+    DEFAULT_MAX_CHUNK_SIZE_TOKENS,
+    DEFAULT_CHUNK_OVERLAP_TOKENS,
+    CHARACTERS_PER_TOKEN_ESTIMATE,
+    DEFAULT_LLM_MODEL,
+    DEFAULT_LLM_TEMPERATURE,
+    DEFAULT_LLM_MAX_TOKENS
+)
 
 # Try to import tiktoken, but make it optional
 try:
@@ -13,75 +26,90 @@ except ImportError:
     TIKTOKEN_AVAILABLE = False
 
 
-# Initialize OpenAI client
-def get_openai_client():
-    """Get OpenAI client, using API key from environment."""
+def get_openai_client() -> OpenAI:
+    """
+    Get OpenAI client, using API key from environment.
+    
+    Returns:
+        Initialized OpenAI client instance
+        
+    Raises:
+        ValueError: If OPENAI_API_KEY environment variable is not set
+    """
     api_key = os.environ.get('OPENAI_API_KEY')
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
     return OpenAI(api_key=api_key)
 
 
-def chunk_text(text: str, max_chunk_size: int = 8000, overlap: int = 200) -> List[str]:
+def chunk_text(
+    text: str,
+    max_chunk_size: int = DEFAULT_MAX_CHUNK_SIZE_TOKENS,
+    overlap: int = DEFAULT_CHUNK_OVERLAP_TOKENS
+) -> List[str]:
     """
-    Split text into chunks for processing.
+    Split text into chunks for LLM processing.
+    
+    Uses tiktoken for accurate token counting if available, otherwise
+    falls back to character-based estimation.
     
     Args:
-        text: Text to chunk
-        max_chunk_size: Maximum tokens per chunk
-        overlap: Number of tokens to overlap between chunks
+        text: Text to chunk into smaller pieces
+        max_chunk_size: Maximum tokens per chunk (default: 8000)
+        overlap: Number of tokens to overlap between chunks for context continuity (default: 200)
         
     Returns:
-        List of text chunks
+        List of text chunks ready for LLM processing
     """
     if not text:
         return []
     
-    # Use tiktoken if available, otherwise use character-based estimation
+    # Use tiktoken if available for accurate token counting
     if TIKTOKEN_AVAILABLE:
         try:
-            encoding = tiktoken.encoding_for_model("gpt-4")
-            tokens = encoding.encode(text)
+            token_encoding = tiktoken.encoding_for_model("gpt-4")
+            encoded_tokens = token_encoding.encode(text)
             
-            if len(tokens) <= max_chunk_size:
+            # If text fits in one chunk, return as-is
+            if len(encoded_tokens) <= max_chunk_size:
                 return [text]
             
-            chunks = []
-            start = 0
+            text_chunks = []
+            chunk_start_index = 0
             
-            while start < len(tokens):
-                end = min(start + max_chunk_size, len(tokens))
-                chunk_tokens = tokens[start:end]
-                chunk_text = encoding.decode(chunk_tokens)
-                chunks.append(chunk_text)
+            while chunk_start_index < len(encoded_tokens):
+                chunk_end_index = min(chunk_start_index + max_chunk_size, len(encoded_tokens))
+                chunk_token_slice = encoded_tokens[chunk_start_index:chunk_end_index]
+                decoded_chunk_text = token_encoding.decode(chunk_token_slice)
+                text_chunks.append(decoded_chunk_text)
                 
-                # Move start position with overlap
-                start = end - overlap
+                # Move start position with overlap for context continuity
+                chunk_start_index = chunk_end_index - overlap
             
-            return chunks
+            return text_chunks
         except Exception:
             # Fall through to character-based chunking if tiktoken fails
             pass
     
-    # Fallback: character-based chunking (1 token ≈ 4 characters)
-    char_chunk_size = max_chunk_size * 4
-    char_overlap_size = overlap * 4
+    # Fallback: character-based chunking using token estimation
+    characters_per_chunk = max_chunk_size * CHARACTERS_PER_TOKEN_ESTIMATE
+    characters_overlap = overlap * CHARACTERS_PER_TOKEN_ESTIMATE
     
-    if len(text) <= char_chunk_size:
+    if len(text) <= characters_per_chunk:
         return [text]
     
-    chunks = []
-    start = 0
+    text_chunks = []
+    chunk_start_index = 0
     
-    while start < len(text):
-        end = min(start + char_chunk_size, len(text))
-        chunk_text = text[start:end]
-        chunks.append(chunk_text)
+    while chunk_start_index < len(text):
+        chunk_end_index = min(chunk_start_index + characters_per_chunk, len(text))
+        chunk_text_content = text[chunk_start_index:chunk_end_index]
+        text_chunks.append(chunk_text_content)
         
-        # Move start position with overlap
-        start = end - char_overlap_size
+        # Move start position with overlap for context continuity
+        chunk_start_index = chunk_end_index - characters_overlap
     
-    return chunks
+    return text_chunks
 
 
 def synthesize_text_with_llm(chunks: List[str], topic_name: str) -> Tuple[Optional[str], Optional[str], int]:
@@ -99,13 +127,16 @@ def synthesize_text_with_llm(chunks: List[str], topic_name: str) -> Tuple[Option
         return None, "No text chunks provided", 0
     
     try:
-        client = get_openai_client()
+        openai_client = get_openai_client()
         
-        # Combine all chunks with clear separation
-        combined_text = "\n\n---\n\n".join([f"Chunk {i+1}:\n{chunk}" for i, chunk in enumerate(chunks)])
+        # Combine all chunks with clear separation for LLM processing
+        chunk_separator = "\n\n---\n\n"
+        numbered_chunks = [f"Chunk {chunk_index + 1}:\n{chunk_content}" 
+                          for chunk_index, chunk_content in enumerate(chunks)]
+        combined_chunks_text = chunk_separator.join(numbered_chunks)
         
         # Create prompt for synthesis
-        prompt = f"""You are a helpful assistant that synthesizes and summarizes educational content.
+        synthesis_prompt = f"""You are a helpful assistant that synthesizes and summarizes educational content.
 
 Given multiple document chunks related to the topic "{topic_name}", please:
 1. Combine and synthesize the information into a coherent, comprehensive document
@@ -116,41 +147,50 @@ Given multiple document chunks related to the topic "{topic_name}", please:
 
 Here are the document chunks:
 
-{combined_text}
+{combined_chunks_text}
 
 Please provide a synthesized, comprehensive document that combines all the information above in a clear and organized manner."""
 
-        # Call OpenAI API
-        response = client.chat.completions.create(
-            model="gpt-4-turbo-preview",  # or "gpt-3.5-turbo" for cheaper option
+        # Call OpenAI API for text synthesis
+        api_response = openai_client.chat.completions.create(
+            model=DEFAULT_LLM_MODEL,
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that synthesizes educational documents."},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": synthesis_prompt}
             ],
-            temperature=0.7,
-            max_tokens=4000
+            temperature=DEFAULT_LLM_TEMPERATURE,
+            max_tokens=DEFAULT_LLM_MAX_TOKENS
         )
         
-        synthesized_text = response.choices[0].message.content
-        total_tokens = response.usage.total_tokens if hasattr(response, 'usage') else 0
+        synthesized_content = api_response.choices[0].message.content
+        total_tokens_used = api_response.usage.total_tokens if hasattr(api_response, 'usage') else 0
         
-        return synthesized_text, None, total_tokens
+        return synthesized_content, None, total_tokens_used
         
-    except Exception as e:
-        return None, f"Error calling LLM: {str(e)}", 0
+    except Exception as api_error:
+        error_message = f"Error calling LLM: {str(api_error)}"
+        return None, error_message, 0
 
 
 def count_tokens(text: str) -> int:
-    """Count tokens in text using tiktoken if available, otherwise estimate."""
+    """
+    Count tokens in text using tiktoken if available, otherwise estimate.
+    
+    Args:
+        text: Text to count tokens for
+        
+    Returns:
+        Estimated or exact number of tokens in the text
+    """
     if TIKTOKEN_AVAILABLE:
         try:
-            encoding = tiktoken.encoding_for_model("gpt-4")
-            tokens = encoding.encode(text)
-            return len(tokens)
+            token_encoding = tiktoken.encoding_for_model("gpt-4")
+            encoded_tokens = token_encoding.encode(text)
+            return len(encoded_tokens)
         except Exception:
             # Fall through to character-based estimation
             pass
     
-    # Fallback: rough estimate (1 token ≈ 4 characters)
-    return len(text) // 4
+    # Fallback: rough estimate using character-to-token ratio
+    return len(text) // CHARACTERS_PER_TOKEN_ESTIMATE
 
