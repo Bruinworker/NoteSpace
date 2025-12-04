@@ -12,7 +12,11 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "cypress:open": "cypress open",
+    "cypress:run": "cypress run",
+    "test:e2e": "cypress run --headless",
+    "test:e2e:headed": "cypress run --headed"
   },
   "eslintConfig": {
     "extends": [
@@ -31,6 +35,8 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:5001"
+  "proxy": "http://localhost:5001",
+  "devDependencies": {
+    "cypress": "^15.7.1"
+  }
 }
-
