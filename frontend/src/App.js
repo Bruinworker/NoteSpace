@@ -486,28 +486,76 @@ function UploadPage({ topics, onUpload, onCreateTopic }) {
   );
 }
 
+/**
+ * FileListView Component
+ * 
+ * Displays uploaded files in a table with the following features:
+ * - Search: Filter files by filename, topic, or uploader name
+ * - Sort: Toggle ascending/descending order by upload date
+ * - Filter: Filter by topic (cycles through all topics)
+ * - Upvote: Allow authenticated users to upvote files
+ * - View: Click filename to open file in viewer
+ * 
+ * @param {Array} notes - Array of note objects to display
+ * @param {Array} topics - Array of available topics for filtering
+ * @param {Function} onUpvote - Callback when upvote button is clicked
+ * @param {Function} onOpenFile - Callback when filename is clicked
+ */
 function FileListView({ notes, topics, onUpvote, onOpenFile }) {
-  const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
-  const [topicFilter, setTopicFilter] = useState('all'); // 'all' or topic_id
+  // State for sorting order: 'asc' (oldest first) or 'desc' (newest first)
+  const [sortOrder, setSortOrder] = useState('desc');
+  
+  // State for topic filter: 'all' shows all topics, or specific topic_id
+  const [topicFilter, setTopicFilter] = useState('all');
+  
+  // State for search query: filters by filename, topic name, or uploader
+  const [searchQuery, setSearchQuery] = useState('');
 
+  /**
+   * Format a date string into a human-readable locale string.
+   * @param {string} dateString - ISO date string
+   * @returns {string} Formatted date string
+   */
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleString();
   };
 
+  /**
+   * Convert bytes to human-readable file size.
+   * @param {number} bytes - File size in bytes
+   * @returns {string} Formatted file size (e.g., "1.5 MB")
+   */
   const formatFileSize = (bytes) => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
   };
 
-  // Get unique topics from notes for filtering
+  // Get available topics for the filter dropdown
   const availableTopics = topics || [];
 
-  // Filter notes by topic
+  /**
+   * Apply search filter to notes.
+   * Searches across filename, topic name, and uploader name (case-insensitive).
+   */
+  const searchFilteredNotes = notes.filter(note => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase();
+    const filename = (note.original_filename || '').toLowerCase();
+    const topicName = (note.topic_name || '').toLowerCase();
+    const uploaderName = (note.uploader_name || '').toLowerCase();
+    
+    return filename.includes(query) || 
+           topicName.includes(query) || 
+           uploaderName.includes(query);
+  });
+
+  // Apply topic filter on top of search results
   const filteredNotes = topicFilter === 'all' 
-    ? notes 
-    : notes.filter(note => note.topic_id.toString() === topicFilter);
+    ? searchFilteredNotes 
+    : searchFilteredNotes.filter(note => note.topic_id.toString() === topicFilter);
 
   // Sort filtered notes by uploaded_at based on sortOrder
   const sortedNotes = [...filteredNotes].sort((a, b) => {
@@ -548,8 +596,39 @@ function FileListView({ notes, topics, onUpvote, onOpenFile }) {
   return (
     <div style={styles.listContainer}>
       <h2 style={styles.sectionTitle}>Uploaded Files</h2>
+      
+      {/* Search Bar - allows users to search through files */}
+      <div style={styles.searchContainer}>
+        <input
+          type="text"
+          placeholder="🔍 Search by filename, topic, or uploader..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={styles.searchInput}
+        />
+        {searchQuery && (
+          <button 
+            onClick={() => setSearchQuery('')}
+            style={styles.clearSearchButton}
+            title="Clear search"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+      
+      {/* Results count indicator */}
+      {searchQuery && (
+        <p style={styles.searchResults}>
+          Found {sortedNotes.length} {sortedNotes.length === 1 ? 'file' : 'files'} 
+          {topicFilter !== 'all' && ` in "${getTopicFilterDisplay()}"`}
+        </p>
+      )}
+      
       {notes.length === 0 ? (
         <p style={styles.emptyMessage}>No files uploaded yet.</p>
+      ) : sortedNotes.length === 0 ? (
+        <p style={styles.emptyMessage}>No files match your search criteria.</p>
       ) : (
         <table style={styles.table}>
           <thead>
@@ -1190,6 +1269,40 @@ const styles = {
     padding: '0.75rem',
     borderBottom: '1px solid #e0e0e0',
     color: '#666'
+  },
+  // Search functionality styles
+  searchContainer: {
+    position: 'relative',
+    marginBottom: '1.5rem'
+  },
+  searchInput: {
+    width: '100%',
+    padding: '0.875rem 2.5rem 0.875rem 1rem',
+    fontSize: '1rem',
+    border: '2px solid #e0e0e0',
+    borderRadius: '8px',
+    outline: 'none',
+    transition: 'border-color 0.2s, box-shadow 0.2s',
+    boxSizing: 'border-box'
+  },
+  clearSearchButton: {
+    position: 'absolute',
+    right: '0.75rem',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    background: 'none',
+    border: 'none',
+    fontSize: '1rem',
+    color: '#999',
+    cursor: 'pointer',
+    padding: '0.25rem',
+    borderRadius: '50%'
+  },
+  searchResults: {
+    color: '#666',
+    fontSize: '0.9rem',
+    marginBottom: '1rem',
+    marginTop: '-0.5rem'
   }
 };
 
