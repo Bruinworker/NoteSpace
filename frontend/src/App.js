@@ -1,41 +1,13 @@
+/**
+ * Main application component for NoteSpace.
+ * 
+ * Handles authentication state, navigation, and coordinates
+ * between different views (upload, list, meta-documents).
+ */
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-
-// Use relative URL for same-domain deployment, or absolute URL if specified
-const API_BASE_URL = process.env.REACT_APP_API_URL || (window.location.origin + '/api');
-
-// Create axios instance with interceptor to add token to each request
-const api = axios.create({
-  baseURL: API_BASE_URL
-});
-
-// Add token to requests
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    // Ensure token doesn't have extra quotes or whitespace
-    const cleanToken = token.trim().replace(/^["']|["']$/g, '');
-    config.headers.Authorization = `Bearer ${cleanToken}`;
-  } else {
-    console.warn('No token found in localStorage');
-  }
-  return config;
-});
-
-// Add response interceptor to handle token errors
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401 || error.response?.status === 422) {
-      // Token might be invalid, clear it
-      if (error.response?.data?.error?.includes('token')) {
-        localStorage.removeItem('token');
-        console.error('Token invalid, cleared from storage');
-      }
-    }
-    return Promise.reject(error);
-  }
-);
+import api, { API_BASE_URL } from './utils/api';
+import { VIEW_TYPES, STATUS_MESSAGES } from './utils/constants';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -44,7 +16,7 @@ function App() {
   const [topics, setTopics] = useState([]);
   const [notes, setNotes] = useState([]);
   const [metaDocuments, setMetaDocuments] = useState([]);
-  const [currentView, setCurrentView] = useState('upload'); // 'upload', 'list', or 'meta-documents'
+  const [currentView, setCurrentView] = useState(VIEW_TYPES.UPLOAD);
 
   useEffect(() => {
     // Always fetch topics (no auth required)

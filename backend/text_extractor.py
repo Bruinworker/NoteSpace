@@ -32,16 +32,16 @@ def extract_text_from_file(file_path: str) -> Tuple[Optional[str], Optional[str]
             return extract_text_from_txt(file_path)
         else:
             return None, f"Unsupported file type: {file_ext}"
-    except Exception as e:
-        return None, f"Error extracting text: {str(e)}"
+    except Exception as extraction_error:
+        return None, f"Error extracting text: {str(extraction_error)}"
 
 
 def extract_text_from_pdf(file_path: str) -> Tuple[Optional[str], Optional[str]]:
     """Extract text from PDF file."""
     try:
         text_content = []
-        with open(file_path, 'rb') as file:
-            pdf_reader = PyPDF2.PdfReader(file)
+        with open(file_path, 'rb') as pdf_file:
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
             for page in pdf_reader.pages:
                 text = page.extract_text()
                 if text:
@@ -49,8 +49,8 @@ def extract_text_from_pdf(file_path: str) -> Tuple[Optional[str], Optional[str]]
         
         combined_text = '\n\n'.join(text_content)
         return combined_text, None
-    except Exception as e:
-        return None, f"Error reading PDF: {str(e)}"
+    except Exception as pdf_error:
+        return None, f"Error reading PDF: {str(pdf_error)}"
 
 
 def extract_text_from_docx(file_path: str) -> Tuple[Optional[str], Optional[str]]:
@@ -64,26 +64,26 @@ def extract_text_from_docx(file_path: str) -> Tuple[Optional[str], Optional[str]
         
         combined_text = '\n\n'.join(text_content)
         return combined_text, None
-    except Exception as e:
-        return None, f"Error reading DOCX: {str(e)}"
+    except Exception as docx_error:
+        return None, f"Error reading DOCX: {str(docx_error)}"
 
 
 def extract_text_from_txt(file_path: str) -> Tuple[Optional[str], Optional[str]]:
     """Extract text from TXT file."""
     try:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            text = file.read()
-        return text, None
+        with open(file_path, 'r', encoding='utf-8') as txt_file:
+            file_text = txt_file.read()
+        return file_text, None
     except UnicodeDecodeError:
-        # Try with different encoding
+        # Try with different encoding as fallback
         try:
-            with open(file_path, 'r', encoding='latin-1') as file:
-                text = file.read()
-            return text, None
-        except Exception as e:
-            return None, f"Error reading TXT file: {str(e)}"
-    except Exception as e:
-        return None, f"Error reading TXT file: {str(e)}"
+            with open(file_path, 'r', encoding='latin-1') as txt_file:
+                file_text = txt_file.read()
+            return file_text, None
+        except Exception as txt_error:
+            return None, f"Error reading TXT file: {str(txt_error)}"
+    except Exception as txt_read_error:
+        return None, f"Error reading TXT file: {str(txt_read_error)}"
 
 
 def clean_text(text: str) -> str:

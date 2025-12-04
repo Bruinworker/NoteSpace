@@ -1,11 +1,23 @@
 """
-API routes for meta document processing and retrieval
+API routes for meta document processing and retrieval.
+
+This module handles:
+- Triggering meta document generation from uploaded files
+- Retrieving meta documents by topic or ID
+- Downloading meta documents as files
+- Checking processing status
 """
 from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from backend.database import db
 from backend.models import MetaDocument, Topic, Note
 from backend.processing_pipeline import process_topic_files, process_single_file
+from backend.constants import (
+    HTTP_STATUS_OK,
+    HTTP_STATUS_BAD_REQUEST,
+    HTTP_STATUS_NOT_FOUND,
+    HTTP_STATUS_INTERNAL_SERVER_ERROR
+)
 import io
 import json
 
@@ -40,7 +52,7 @@ def process_topic(topic_id):
             'result': result
         }), 200
         
-    except Exception as e:
+    except Exception as processing_error:
         return jsonify({'error': str(e)}), 500
 
 
@@ -66,7 +78,7 @@ def process_note(note_id):
             'result': result
         }), 200
         
-    except Exception as e:
+    except Exception as processing_error:
         return jsonify({'error': str(e)}), 500
 
 
@@ -87,7 +99,7 @@ def get_meta_document_by_topic(topic_id):
             'meta_document': meta_doc.to_dict()
         }), 200
         
-    except Exception as e:
+    except Exception as processing_error:
         return jsonify({'error': str(e)}), 500
 
 
@@ -106,7 +118,7 @@ def get_meta_document(meta_document_id):
             'meta_document': meta_doc.to_dict()
         }), 200
         
-    except Exception as e:
+    except Exception as processing_error:
         return jsonify({'error': str(e)}), 500
 
 
@@ -129,7 +141,7 @@ def list_meta_documents():
             'meta_documents': [doc.to_dict() for doc in meta_docs]
         }), 200
         
-    except Exception as e:
+    except Exception as processing_error:
         return jsonify({'error': str(e)}), 500
 
 
@@ -165,7 +177,7 @@ def download_meta_document(meta_document_id):
             download_name=filename
         )
         
-    except Exception as e:
+    except Exception as processing_error:
         return jsonify({'error': str(e)}), 500
 
 
@@ -189,6 +201,6 @@ def get_meta_document_status(meta_document_id):
             'updated_at': meta_doc.updated_at.isoformat()
         }), 200
         
-    except Exception as e:
+    except Exception as processing_error:
         return jsonify({'error': str(e)}), 500
 
