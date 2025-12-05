@@ -7,6 +7,7 @@ This module provides functions for:
 - Token counting utilities
 """
 import os
+import httpx
 from openai import OpenAI
 from typing import List, Optional, Tuple
 from backend.constants import (
@@ -39,7 +40,10 @@ def get_openai_client() -> OpenAI:
     api_key = os.environ.get('OPENAI_API_KEY')
     if not api_key:
         raise ValueError("OPENAI_API_KEY environment variable not set")
-    return OpenAI(api_key=api_key)
+    
+    # Create httpx client without proxy to avoid proxy-related issues
+    http_client = httpx.Client(proxy=None)
+    return OpenAI(api_key=api_key, http_client=http_client)
 
 
 def chunk_text(
