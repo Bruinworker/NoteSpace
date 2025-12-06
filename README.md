@@ -39,406 +39,50 @@ This section presents the architectural diagrams for NoteSpace following standar
 
 ---
 
-### 1. Component Diagram (Run-Time View / Component-Connector View)
+### 1. Entity-Relationship Diagram (Data View)
 
-This component diagram illustrates how the independent, deployable parts of NoteSpace are connected. It shows the required and provided interfaces between components, and helps reason about message flow and deployment.
+This ERD describes the structure of the data within NoteSpace using UML notation. It shows all database entities, their attributes, primary/foreign keys, and relationships with cardinality.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                                    «component»                                           │
-│                                  CLIENT TIER                                             │
-│  ┌────────────────────────────────────────────────────────────────────────────────────┐ │
-│  │                            «component»                                              │ │
-│  │                        React Frontend (SPA)                                         │ │
-│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌───────────────┐ │ │
-│  │  │  «component»    │  │  «component»    │  │  «component»    │  │ «component»   │ │ │
-│  │  │   AuthForm      │  │  UploadPage     │  │  FileListView   │  │ FileViewer    │ │ │
-│  │  │                 │  │                 │  │                 │  │               │ │ │
-│  │  │ [Login/Register]│  │ [Topic Select]  │  │ [Search/Filter] │  │ [Preview/DL]  │ │ │
-│  │  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘  └───────┬───────┘ │ │
-│  │           │                    │                    │                   │         │ │
-│  │           └────────────────────┴────────────────────┴───────────────────┘         │ │
-│  │                                         │                                          │ │
-│  │                              ┌──────────┴──────────┐                              │ │
-│  │                              │    «component»      │                              │ │
-│  │                              │    API Service      │                              │ │
-│  │                              │    (Axios + JWT)    │                              │ │
-│  │                              └──────────┬──────────┘                              │ │
-│  │                                         ○ IRestAPI                                │ │
-│  └─────────────────────────────────────────┼──────────────────────────────────────────┘ │
-└─────────────────────────────────────────────┼───────────────────────────────────────────┘
-                                              │ HTTP/HTTPS (REST)
-                                              │
-┌─────────────────────────────────────────────┼───────────────────────────────────────────┐
-│                                    «component»                                           │
-│                                   SERVER TIER                                            │
-│                                              ●───────────────────────────────────┐       │
-│  ┌───────────────────────────────────────────┼──────────────────────────────────┐│       │
-│  │                            «component»    │                                   ││       │
-│  │                        Flask Application  │                                   ││       │
-│  │                                           │                                   ││       │
-│  │  ┌─────────────────┐  ┌─────────────────┐│┌─────────────────┐ ┌────────────┐ ││       │
-│  │  │  «component»    │  │  «component»    │││  «component»    │ │«component» │ ││       │
-│  │  │  AuthRoutes     │  │  TopicRoutes    │││  UploadRoutes   │ │MetaDocRoute│ ││       │
-│  │  │ /api/auth/*     │  │ /api/topics/*   │││ /api/upload/*   │ │/api/meta-* │ ││       │
-│  │  │                 │  │                 │││                 │ │            │ ││       │
-│  │  │ ○ IUserAuth     │  │ ○ ITopicMgmt    │││ ○ IFileUpload   │ │○ IMetaDoc  │ ││       │
-│  │  └────────┬────────┘  └────────┬────────┘│└────────┬────────┘ └─────┬──────┘ ││       │
-│  │           │                    │         │         │                │        ││       │
-│  │           └────────────────────┴─────────┴─────────┴────────────────┘        ││       │
-│  │                                          │                                    ││       │
-│  │                         ┌────────────────┼─────────────────┐                 ││       │
-│  │                         │                │                 │                 ││       │
-│  │              ┌──────────┴──────────┐  ┌──┴───────────────┐ │                 ││       │
-│  │              │    «component»      │  │  «component»     │ │                 ││       │
-│  │              │   SQLAlchemy ORM    │  │ ProcessingPipeline│ │                 ││       │
-│  │              │                     │  │                  │ │                 ││       │
-│  │              │ ○ IDataAccess       │  │ [TextExtractor]  │ │                 ││       │
-│  │              └──────────┬──────────┘  │ [LLMService]     │ │                 ││       │
-│  │                         │             └────────┬─────────┘ │                 ││       │
-│  └─────────────────────────┼──────────────────────┼───────────┘                 ││       │
-│                            │                      │                              ││       │
-│  ┌─────────────────────────┼──────────────────────┼─────────────────────────────┐│       │
-│  │           «component»   │        «component»   │       «component»           ││       │
-│  │         DATA TIER       │                      │                              ││       │
-│  │  ┌──────────────────────┴───┐  ┌───────────────┴────┐  ┌───────────────────┐ ││       │
-│  │  │      «database»          │  │   «filesystem»     │  │   «external»      │ ││       │
-│  │  │       SQLite             │  │   File Storage     │  │   OpenAI API      │ ││       │
-│  │  │     notespace.db         │  │    /uploads/       │  │   (GPT-4)         │ ││       │
-│  │  │                          │  │                    │  │                   │ ││       │
-│  │  │ [Users, Topics, Notes,   │  │ [PDF, DOCX, TXT,   │  │ ○ ILLMSynthesis   │ ││       │
-│  │  │  Upvotes, MetaDocuments] │  │  Images, etc.]     │  │                   │ ││       │
-│  │  └──────────────────────────┘  └────────────────────┘  └───────────────────┘ ││       │
-│  └──────────────────────────────────────────────────────────────────────────────┘│       │
-└──────────────────────────────────────────────────────────────────────────────────┘       │
-                                                                                           │
-Legend:  ○ = Provided Interface    ● = Required Interface    ───► = Dependency           │
-         «component» = UML Component Stereotype                                            │
-```
+![UML Entity-Relationship Diagram](./UML%20Diagram.png)
 
-**Key Interfaces:**
-| Interface | Provider | Description |
-|-----------|----------|-------------|
-| `IRestAPI` | API Service (Frontend) | HTTP REST calls to backend |
-| `IUserAuth` | AuthRoutes | User registration, login, JWT management |
-| `ITopicMgmt` | TopicRoutes | Topic CRUD operations |
-| `IFileUpload` | UploadRoutes | File upload, download, listing |
-| `IMetaDoc` | MetaDocRoutes | AI summary generation and retrieval |
-| `IDataAccess` | SQLAlchemy ORM | Database operations |
-| `ILLMSynthesis` | OpenAI API | Text synthesis and summarization |
+**Key Entities:**
+| Entity | Description |
+|--------|-------------|
+| `USERS` | User accounts with hashed passwords for authentication |
+| `TOPICS` | Course topics/categories for organizing notes |
+| `NOTES` | Uploaded file metadata and storage references |
+| `UPVOTES` | Junction table for user upvotes (many-to-many) |
+| `META_DOCUMENTS` | AI-generated summaries of notes |
+
+**Relationships:**
+| Relationship | Entities | Cardinality | Description |
+|--------------|----------|-------------|-------------|
+| uploads | USERS → NOTES | 1 : 0..* | A user can upload many notes |
+| belongs_to | NOTES → TOPICS | 0..* : 1 | Many notes belong to one topic |
+| upvotes | USERS ↔ NOTES | M : N | Many-to-many via UPVOTES junction |
+| summarizes | META_DOCUMENTS → TOPICS | 0..* : 1 | Topic can have multiple summaries |
 
 ---
 
-### 2. Entity-Relationship Diagram (Data View)
-
-This ERD describes the structure of the data within NoteSpace, following Chen notation with crow's foot cardinality. It shows entities, their attributes, primary/foreign keys, and relationships.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────────┐
-│                              ENTITY-RELATIONSHIP DIAGRAM                                     │
-│                                   NoteSpace Database                                         │
-└─────────────────────────────────────────────────────────────────────────────────────────────┘
-
-    ┌─────────────────────────┐                           ┌─────────────────────────┐
-    │         USERS           │                           │         TOPICS          │
-    ├─────────────────────────┤                           ├─────────────────────────┤
-    │ «PK» id : INTEGER       │                           │ «PK» id : INTEGER       │
-    │ ─────────────────────── │                           │ ─────────────────────── │
-    │ name : VARCHAR(100)     │                           │ name : VARCHAR(200)     │
-    │ email : VARCHAR(120) «U»│                           │ deadline : DATETIME     │
-    │ password_hash: VAR(255) │                           │ created_at : DATETIME   │
-    │ created_at : DATETIME   │                           └───────────┬─────────────┘
-    └───────────┬─────────────┘                                       │
-                │                                                     │
-                │ 1                                                   │ 1
-                │                                                     │
-                ├──────────────────────────┐                         │
-                │                          │                         │
-                ▼ 0..*                     │                         ▼ 0..*
-    ┌─────────────────────────┐           │           ┌─────────────────────────┐
-    │         NOTES           │           │           │      META_DOCUMENTS     │
-    ├─────────────────────────┤           │           ├─────────────────────────┤
-    │ «PK» id : INTEGER       │           │           │ «PK» id : INTEGER       │
-    │ ─────────────────────── │           │           │ ─────────────────────── │
-    │ «FK» user_id : INT (opt)│◄──────────┘           │ «FK» topic_id : INTEGER │
-    │ «FK» topic_id : INTEGER │───────────────────────│ «FK» note_id : INT (opt)│
-    │ file_url : VARCHAR(500) │                       │ synthesized_content:TEXT│
-    │ original_filename:      │                       │ source_filenames : TEXT │
-    │        VARCHAR(255)     │                       │ chunk_count : INTEGER   │
-    │ file_size : INTEGER     │◄──────────────────────│ token_count : INTEGER   │
-    │ upvote_count : INTEGER  │           0..1        │ processing_status :     │
-    │ uploaded_at : DATETIME  │                       │        VARCHAR(50)      │
-    └───────────┬─────────────┘                       │ error_message : TEXT    │
-                │                                     │ created_at : DATETIME   │
-                │ 1                                   │ updated_at : DATETIME   │
-                │                                     └─────────────────────────┘
-                ▼ 0..*
-    ┌─────────────────────────┐
-    │        UPVOTES          │
-    ├─────────────────────────┤
-    │ «PK» id : INTEGER       │
-    │ ─────────────────────── │
-    │ «FK» user_id : INTEGER  │───────────────────────► USERS
-    │ «FK» note_id : INTEGER  │
-    │ created_at : DATETIME   │
-    │ ─────────────────────── │
-    │ «UC» (user_id, note_id) │  ◄── Unique Constraint: One upvote per user per note
-    └─────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────────────────────┐
-│ LEGEND                                                                                       │
-│ ────────────────────────────────────────────────────────────────────────────────────────── │
-│ «PK» = Primary Key          «FK» = Foreign Key           «U» = Unique Constraint            │
-│ «UC» = Unique Constraint (composite)                      (opt) = Optional/Nullable          │
-│                                                                                              │
-│ CARDINALITY (Crow's Foot Notation):                                                         │
-│     1 ──────── 0..* : One-to-Many (zero or more)                                           │
-│     1 ──────── 1    : One-to-One                                                            │
-│     0..1 ───── 0..* : Optional One-to-Many                                                  │
-└─────────────────────────────────────────────────────────────────────────────────────────────┘
-
-RELATIONSHIPS:
-┌───────────────────┬─────────────────┬──────────────┬────────────────────────────────────────┐
-│ Relationship      │ Entities        │ Cardinality  │ Description                            │
-├───────────────────┼─────────────────┼──────────────┼────────────────────────────────────────┤
-│ uploads           │ USERS → NOTES   │ 1 : 0..*     │ A user can upload many notes           │
-│ belongs_to        │ NOTES → TOPICS  │ 0..* : 1     │ Many notes belong to one topic         │
-│ upvotes           │ USERS → NOTES   │ M : N        │ Many-to-many via UPVOTES junction      │
-│ summarizes        │ META_DOC → TOPIC│ 0..* : 1     │ Topic can have multiple summaries      │
-│ references        │ META_DOC → NOTES│ 0..1 : 1     │ MetaDoc optionally references one note │
-└───────────────────┴─────────────────┴──────────────┴────────────────────────────────────────┘
-```
-
----
-
-### 3. Sequence Diagram (Behavioral View)
+### 2. Sequence Diagram (Behavioral View)
 
 This sequence diagram describes the interaction protocol between components for the **File Upload with AI Summary Generation** use case. It clarifies protocols, ordering, responsibilities, and integration points.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────────┐
-│                              SEQUENCE DIAGRAM                                                │
-│                    Use Case: File Upload with AI Meta-Document Generation                    │
-└─────────────────────────────────────────────────────────────────────────────────────────────┘
+![Sequence Diagram](./Sequence%20Diagram.png)
 
-    ┌─────┐          ┌─────────┐       ┌────────────┐      ┌──────────┐     ┌─────────┐    ┌────────┐
-    │User │          │ React   │       │ Flask      │      │SQLAlchemy│     │Processing│    │OpenAI  │
-    │     │          │Frontend │       │ Backend    │      │   ORM    │     │ Pipeline │    │  API   │
-    └──┬──┘          └────┬────┘       └─────┬──────┘      └────┬─────┘     └────┬─────┘    └───┬────┘
-       │                  │                  │                  │                │              │
-       │  1. Select File  │                  │                  │                │              │
-       │  & Topic         │                  │                  │                │              │
-       │─────────────────►│                  │                  │                │              │
-       │                  │                  │                  │                │              │
-       │                  │ 2. POST /api/upload/                │                │              │
-       │                  │     [file, topic_id, JWT?]          │                │              │
-       │                  │─────────────────►│                  │                │              │
-       │                  │                  │                  │                │              │
-       │                  │                  │ 3. Validate JWT  │                │              │
-       │                  │                  │    (optional)    │                │              │
-       │                  │                  │──────┐           │                │              │
-       │                  │                  │      │           │                │              │
-       │                  │                  │◄─────┘           │                │              │
-       │                  │                  │                  │                │              │
-       │                  │                  │ 4. Validate      │                │              │
-       │                  │                  │    Topic exists  │                │              │
-       │                  │                  │─────────────────►│                │              │
-       │                  │                  │                  │                │              │
-       │                  │                  │ 4.1 Topic        │                │              │
-       │                  │                  │◄─────────────────│                │              │
-       │                  │                  │                  │                │              │
-       │                  │                  │ 5. Save file to  │                │              │
-       │                  │                  │    /uploads/     │                │              │
-       │                  │                  │──────┐           │                │              │
-       │                  │                  │      │ [UUID     │                │              │
-       │                  │                  │◄─────┘  rename]  │                │              │
-       │                  │                  │                  │                │              │
-       │                  │                  │ 6. Create Note   │                │              │
-       │                  │                  │    record        │                │              │
-       │                  │                  │─────────────────►│                │              │
-       │                  │                  │                  │                │              │
-       │                  │                  │ 6.1 Note created │                │              │
-       │                  │                  │◄─────────────────│                │              │
-       │                  │                  │                  │                │              │
-       │                  │ 7. 201 Created   │                  │                │              │
-       │                  │    {note: {...}} │                  │                │              │
-       │                  │◄─────────────────│                  │                │              │
-       │                  │                  │                  │                │              │
-       │ 8. Upload Success│                  │                  │                │              │
-       │◄─────────────────│                  │                  │                │              │
-       │                  │                  │                  │                │              │
-       │                  │                  │                  │                │              │
-   ════╪══════════════════╪════════════[ AI SUMMARY GENERATION ]═══════════════════════════════
-       │                  │                  │                  │                │              │
-       │ 9. Request Meta  │                  │                  │                │              │
-       │    Document      │                  │                  │                │              │
-       │─────────────────►│                  │                  │                │              │
-       │                  │                  │                  │                │              │
-       │                  │ 10. POST /api/meta-documents/       │                │              │
-       │                  │     generate/{topic_id}             │                │              │
-       │                  │─────────────────►│                  │                │              │
-       │                  │                  │                  │                │              │
-       │                  │                  │ 11. Create MetaDoc               │              │
-       │                  │                  │     status='processing'          │              │
-       │                  │                  │─────────────────►│                │              │
-       │                  │                  │                  │                │              │
-       │                  │                  │ 12. Start        │                │              │
-       │                  │                  │     Pipeline     │                │              │
-       │                  │                  │─────────────────────────────────►│              │
-       │                  │                  │                  │                │              │
-       │                  │                  │                  │ 13. Get Notes  │              │
-       │                  │                  │                  │◄───────────────│              │
-       │                  │                  │                  │                │              │
-       │                  │                  │                  │ 13.1 Notes[]   │              │
-       │                  │                  │                  │───────────────►│              │
-       │                  │                  │                  │                │              │
-       │                  │                  │                  │    ┌───────────┴───────────┐  │
-       │                  │                  │                  │    │ 14. For each note:    │  │
-       │                  │                  │                  │    │     - Read file       │  │
-       │                  │                  │                  │    │     - Extract text    │  │
-       │                  │                  │                  │    │     - Clean text      │  │
-       │                  │                  │                  │    └───────────┬───────────┘  │
-       │                  │                  │                  │                │              │
-       │                  │                  │                  │    ┌───────────┴───────────┐  │
-       │                  │                  │                  │    │ 15. Chunk text        │  │
-       │                  │                  │                  │    │     (max 8000 tokens) │  │
-       │                  │                  │                  │    └───────────┬───────────┘  │
-       │                  │                  │                  │                │              │
-       │                  │                  │                  │                │ 16. POST     │
-       │                  │                  │                  │                │  /completions│
-       │                  │                  │                  │                │─────────────►│
-       │                  │                  │                  │                │              │
-       │                  │                  │                  │                │ 16.1 GPT-4   │
-       │                  │                  │                  │                │   synthesis  │
-       │                  │                  │                  │                │◄─────────────│
-       │                  │                  │                  │                │              │
-       │                  │                  │                  │ 17. Update     │              │
-       │                  │                  │                  │     MetaDoc    │              │
-       │                  │                  │                  │◄───────────────│              │
-       │                  │                  │                  │                │              │
-       │                  │                  │                  │     [synthesized_content,    │
-       │                  │                  │                  │      status='completed',     │
-       │                  │                  │                  │      chunk_count,            │
-       │                  │                  │                  │      token_count]            │
-       │                  │                  │                  │                │              │
-       │                  │ 18. 200 OK       │                  │                │              │
-       │                  │   {meta_document}│                  │                │              │
-       │                  │◄─────────────────│                  │                │              │
-       │                  │                  │                  │                │              │
-       │ 19. Display AI   │                  │                  │                │              │
-       │     Summary      │                  │                  │                │              │
-       │◄─────────────────│                  │                  │                │              │
-       │                  │                  │                  │                │              │
-    ┌──┴──┐          ┌────┴────┐       ┌─────┴──────┐      ┌────┴─────┐     ┌────┴─────┐    ┌───┴────┐
-    │User │          │ React   │       │ Flask      │      │SQLAlchemy│     │Processing│    │OpenAI  │
-    │     │          │Frontend │       │ Backend    │      │   ORM    │     │ Pipeline │    │  API   │
-    └─────┘          └─────────┘       └────────────┘      └──────────┘     └──────────┘    └────────┘
+**Participants:**
+| Component | Role |
+|-----------|------|
+| User | Initiates file upload and requests AI summaries |
+| React Frontend | Single-page application handling UI and API calls |
+| Flask Backend | REST API server processing requests |
+| SQLAlchemy ORM | Database abstraction layer |
+| Processing Pipeline | Text extraction, chunking, and LLM orchestration |
+| OpenAI API | External LLM service for text synthesis |
 
-NOTATION:
-┌─────────────────────────────────────────────────────────────────────────────────────────────┐
-│ ─────────────────► : Synchronous message          ◄─────────────────  : Return message      │
-│ ════════════════   : Lifeline                     ──────┐             : Self-call           │
-│ [condition]        : Guard condition                    │◄─────┘                            │
-│ {text}             : Response/data payload                                                   │
-└─────────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-### 4. State Machine Diagram (Behavioral View)
-
-This state diagram describes the lifecycle of a **MetaDocument** entity, showing the inner state transitions triggered by different events during the AI processing pipeline.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────────┐
-│                              STATE MACHINE DIAGRAM                                           │
-│                           MetaDocument Processing Lifecycle                                  │
-└─────────────────────────────────────────────────────────────────────────────────────────────┘
-
-                                    ┌───────────────┐
-                                    │               │
-                                    │    (start)    │
-                                    │       ●       │
-                                    │               │
-                                    └───────┬───────┘
-                                            │
-                                            │ create()
-                                            │
-                                            ▼
-                              ┌─────────────────────────────┐
-                              │                             │
-                              │          PENDING            │
-                              │                             │
-                              │  entry/ set status='pending'│
-                              │  do/ await processing start │
-                              │                             │
-                              └─────────────┬───────────────┘
-                                            │
-                                            │ startProcessing()
-                                            │
-                                            ▼
-                              ┌─────────────────────────────┐
-                              │                             │
-                              │        PROCESSING           │
-                              │                             │
-                              │  entry/ set status=         │
-                              │         'processing'        │
-                              │  do/ extract text           │◄──────────────────┐
-                              │  do/ chunk text             │                   │
-                              │  do/ call LLM API           │                   │
-                              │                             │                   │
-                              └──────┬──────────────┬───────┘                   │
-                                     │              │                           │
-                      [success]      │              │ [error]                   │
-                                     │              │                           │
-                                     ▼              ▼                           │
-               ┌─────────────────────────┐    ┌─────────────────────────┐       │
-               │                         │    │                         │       │
-               │       COMPLETED         │    │         FAILED          │       │
-               │                         │    │                         │       │
-               │  entry/ set status=     │    │  entry/ set status=     │       │
-               │         'completed'     │    │         'failed'        │       │
-               │  entry/ save content    │    │  entry/ save error_msg  │       │
-               │  entry/ set chunk_count │    │                         │       │
-               │  entry/ set token_count │    │                         │       │
-               │                         │    │                         │       │
-               └────────────┬────────────┘    └────────────┬────────────┘       │
-                            │                              │                     │
-                            │                              │ retry()             │
-                            │                              │─────────────────────┘
-                            │                              │
-                            │                              ▼
-                            │                       ┌───────────────┐
-                            │                       │               │
-                            └──────────────────────►│    (end)      │
-                                                    │       ◉       │
-                                                    │               │
-                                                    └───────────────┘
-
-┌─────────────────────────────────────────────────────────────────────────────────────────────┐
-│ LEGEND                                                                                       │
-│ ─────────────────────────────────────────────────────────────────────────────────────────── │
-│ ●  = Initial state (start)           ◉  = Final state (end)                                 │
-│ ┌────────┐                                                                                   │
-│ │ STATE  │ = State with name          entry/ = Action on state entry                        │
-│ └────────┘                            do/ = Activity while in state                         │
-│ ──────► = Transition                  [guard] = Condition for transition                    │
-│ event() = Trigger event                                                                      │
-└─────────────────────────────────────────────────────────────────────────────────────────────┘
-
-TRANSITIONS:
-┌───────────────────┬────────────────┬─────────────────┬───────────────────────────────────────┐
-│ Transition        │ From State     │ To State        │ Trigger / Guard                       │
-├───────────────────┼────────────────┼─────────────────┼───────────────────────────────────────┤
-│ create            │ (start)        │ PENDING         │ User requests AI summary              │
-│ startProcessing   │ PENDING        │ PROCESSING      │ Pipeline begins processing            │
-│ complete          │ PROCESSING     │ COMPLETED       │ [success] LLM returns valid response  │
-│ fail              │ PROCESSING     │ FAILED          │ [error] Exception or API error        │
-│ retry             │ FAILED         │ PROCESSING      │ User retries generation               │
-│ terminate         │ COMPLETED      │ (end)           │ Process complete                      │
-│ terminate         │ FAILED         │ (end)           │ User abandons retry                   │
-└───────────────────┴────────────────┴─────────────────┴───────────────────────────────────────┘
-```
+**Key Flows:**
+1. **File Upload Flow** (Steps 1-8): User selects file → POST to backend → File saved → Note record created
+2. **AI Summary Generation** (Steps 9-19): Request meta document → Extract text → Chunk → LLM synthesis → Save result
 
 ---
 
